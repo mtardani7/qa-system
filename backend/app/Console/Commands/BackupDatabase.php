@@ -1,0 +1,4 @@
+<?php
+namespace App\Console\Commands;
+use Illuminate\Console\Command; use Symfony\Component\Process\Process;
+class BackupDatabase extends Command { protected $signature='qms:backup-database'; protected $description='Create a compressed PostgreSQL database backup.'; public function handle():int{$directory=storage_path('app/backups');if(!is_dir($directory))mkdir($directory,0750,true);$file=$directory.'/qms-'.now()->format('Ymd_His').'.dump';$process=new Process(['pg_dump','--format=custom','--file='.$file,'--host'=>(string)env('DB_HOST'),'--port'=>(string)env('DB_PORT',5432),'--username'=>(string)env('DB_USERNAME'),'--dbname'=>(string)env('DB_DATABASE')],base_path(),['PGPASSWORD'=>(string)env('DB_PASSWORD')]);$process->setTimeout(3600);$process->run();if(!$process->isSuccessful()){$this->error($process->getErrorOutput());return self::FAILURE;}$this->info("Backup created: {$file}");return self::SUCCESS;} }

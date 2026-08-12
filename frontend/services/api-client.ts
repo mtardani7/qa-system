@@ -1,0 +1,5 @@
+import axios from "axios";
+import { authStore } from "@/features/auth/store";
+export const apiClient = axios.create({ baseURL: process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1", headers: { Accept: "application/json", "Content-Type": "application/json" } });
+apiClient.interceptors.request.use((config) => { if (typeof window !== "undefined") { const token = window.localStorage.getItem("qms_token"); if (token) config.headers.Authorization = `Bearer ${token}`; } return config; });
+apiClient.interceptors.response.use((response) => response, (error) => { if (typeof window !== "undefined" && error.response?.status === 401 && !String(error.config?.url).includes("/auth/login")) { authStore.getState().clearSession(); window.dispatchEvent(new Event("qms:session-expired")); const next = `${window.location.pathname}${window.location.search}`; window.setTimeout(() => window.location.replace(`/login?reason=expired&next=${encodeURIComponent(next)}`), 1200); } return Promise.reject(error); });

@@ -1,0 +1,68 @@
+<?php
+
+use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\PlantController;
+use App\Http\Controllers\Api\DailyReportController;
+use App\Http\Controllers\Api\DailyReportLookupController;
+use App\Http\Controllers\Api\LineController;
+use App\Http\Controllers\Api\MachineController;
+use App\Http\Controllers\Api\ShiftController;
+use App\Http\Controllers\Api\ProductController;
+use App\Http\Controllers\Api\DefectController;
+use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\QaCheckerController;
+use App\Http\Controllers\Api\DailyReportWorkflowController;
+use App\Http\Controllers\Api\DailyReportExportController;
+use App\Http\Controllers\Api\CompanyController;
+use App\Http\Controllers\Api\DepartmentController;
+use App\Http\Controllers\Api\HolidayController;
+use App\Http\Controllers\Api\SystemSettingController;
+use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\AuditLogController;
+use App\Http\Controllers\Api\UserActivityController;
+use App\Http\Controllers\Api\DailyReportImportController;
+use App\Http\Controllers\Api\UserController;
+
+Route::prefix('v1')->group(function (): void {
+    Route::post('auth/login', [AuthController::class, 'login'])->middleware('throttle:login');
+    Route::middleware(['auth:sanctum', 'throttle:api', 'activity'])->group(function (): void {
+        Route::get('auth/me', [AuthController::class, 'me']);
+        Route::post('auth/logout', [AuthController::class, 'logout']);
+        Route::get('dashboard', [DashboardController::class, 'overview'])->middleware('permission:dashboard.view');
+        Route::apiResource('plants', PlantController::class);
+        Route::apiResource('lines', LineController::class);
+        Route::apiResource('machines', MachineController::class);
+        Route::apiResource('shifts', ShiftController::class);
+        Route::post('products/import', [ProductController::class, 'import']);
+        Route::apiResource('products', ProductController::class);
+        Route::apiResource('defects', DefectController::class);
+        Route::apiResource('qa-checkers', QaCheckerController::class);
+        Route::post('users/{user}/reset-password', [UserController::class, 'resetPassword']);
+        Route::apiResource('users', UserController::class)->only(['index', 'store', 'update']);
+        Route::apiResource('companies', CompanyController::class);
+        Route::apiResource('departments', DepartmentController::class);
+        Route::apiResource('holidays', HolidayController::class);
+        Route::apiResource('system-settings', SystemSettingController::class);
+        Route::get('notifications', [NotificationController::class, 'index']);
+        Route::post('notifications/{notification}/read', [NotificationController::class, 'read']);
+        Route::post('notifications/read-all', [NotificationController::class, 'readAll']);
+        Route::get('audit-logs', [AuditLogController::class, 'index']);
+        Route::get('user-activities', [UserActivityController::class, 'index']);
+        Route::get('daily-reports/lookups', [DailyReportLookupController::class, 'index'])->middleware('permission:daily-reports.view');
+        Route::get('daily-reports/lookups/products', [DailyReportLookupController::class, 'products'])->middleware('permission:daily-reports.view');
+        Route::post('daily-reports/import', [DailyReportImportController::class, 'store']);
+        Route::get('daily-reports/imports/{import}', [DailyReportImportController::class, 'show']);
+        Route::post('daily-reports/export', [DailyReportExportController::class, 'store']);
+        Route::get('daily-reports/exports/{export}', [DailyReportExportController::class, 'show']);
+        Route::get('daily-reports/exports/{export}/download', [DailyReportExportController::class, 'download']);
+        Route::post('daily-reports/{daily_report}/submit', [DailyReportWorkflowController::class, 'submit']);
+        Route::post('daily-reports/{daily_report}/review', [DailyReportWorkflowController::class, 'review']);
+        Route::post('daily-reports/{daily_report}/approve', [DailyReportWorkflowController::class, 'approve']);
+        Route::post('daily-reports/{daily_report}/reject', [DailyReportWorkflowController::class, 'reject']);
+        Route::post('daily-reports/{daily_report}/lock', [DailyReportWorkflowController::class, 'lock']);
+        Route::post('daily-reports/{daily_report}/duplicate', [DailyReportWorkflowController::class, 'duplicate']);
+        Route::get('daily-reports/{daily_report}/print', [DailyReportController::class, 'print']);
+        Route::apiResource('daily-reports', DailyReportController::class);
+    });
+});

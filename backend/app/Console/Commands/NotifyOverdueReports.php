@@ -1,0 +1,4 @@
+<?php
+namespace App\Console\Commands;
+use App\Enums\DailyReportStatus; use App\Models\DailyReport; use App\Models\User; use App\Notifications\ReportSubmissionOverdue; use Illuminate\Console\Command;
+class NotifyOverdueReports extends Command { protected $signature='qms:notify-overdue-reports'; protected $description='Notify supervisors about draft reports that were not submitted.'; public function handle():int{$reports=DailyReport::query()->whereDate('production_date',now()->subDay()->toDateString())->where('status',DailyReportStatus::Draft)->get();$users=User::query()->whereHas('roles',fn($q)=>$q->whereIn('name',['QA Supervisor','QA Manager']))->get();$reports->each(fn($report)=>$users->each(fn($user)=>$user->notify(new ReportSubmissionOverdue($report))));$this->info("Notified {$reports->count()} overdue reports.");return self::SUCCESS;} }

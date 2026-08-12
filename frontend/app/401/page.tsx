@@ -1,0 +1,2 @@
+import Link from "next/link";
+export default function UnauthorizedPage() { return <main className="flex min-h-screen items-center justify-center p-6"><div className="text-center"><p className="text-sm font-medium text-amber-600">401</p><h1 className="mt-2 text-3xl font-semibold">Authentication required</h1><p className="mt-2 text-sm text-muted-foreground">Please sign in to continue.</p><Link className="mt-6 inline-block text-sm font-medium text-emerald-600" href="/login">Go to login</Link></div></main>; }

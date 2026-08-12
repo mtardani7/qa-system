@@ -1,0 +1,3 @@
+"use client";
+import { useAuthStore } from "@/features/auth/store";
+export function usePermission() { const permissions = useAuthStore((state) => state.permissions); const roles = useAuthStore((state) => state.roles); const can = (permission: string) => { if (permissions.includes(permission)) return true; const aliases: Record<string, string> = { "daily-report.create": "daily-reports.create", "daily-report.edit": "daily-reports.update", "daily-report.view": "daily-reports.view" }; return Boolean(aliases[permission] && permissions.includes(aliases[permission])); }; return { can, hasRole: (role: string) => roles.includes(role), permissions, roles }; }

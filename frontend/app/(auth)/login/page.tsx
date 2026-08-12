@@ -1,0 +1,13 @@
+"use client";
+import { useState } from "react"; import axios from "axios";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { login } from "@/features/auth/services";
+import { useAuthStore } from "@/features/auth/store";
+
+export default function LoginPage() {
+  const router = useRouter(); const params = useSearchParams(); const setSession = useAuthStore((state) => state.setSession);
+  const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [error, setError] = useState(""); const [saving, setSaving] = useState(false);
+  async function submit(event: React.FormEvent) { event.preventDefault(); setSaving(true); setError(""); try { const result = await login({ email, password, device_name: "qms-web" }); setSession(result.token, { ...result.user, roles: result.roles, permissions: result.permissions }, result.roles, result.permissions); router.replace(params.get("next") || "/dashboard"); } catch (requestError: unknown) { const message = axios.isAxiosError<{ message?: string }>(requestError) ? requestError.response?.data?.message : undefined; setError(message || "Unable to sign in. Check your credentials."); } finally { setSaving(false); } }
+  return <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900"><h1 className="text-xl font-semibold text-slate-950 dark:text-white">Sign in</h1><p className="mt-1 text-sm text-slate-500">Access your quality workspace.</p>{params.get("reason") === "expired" && <div role="alert" className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">Your session expired. Please sign in again.</div>}{error && <div role="alert" className="mt-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}<form className="mt-6 space-y-4" onSubmit={submit}><label className="block text-sm font-medium">Email<input required value={email} onChange={(event) => setEmail(event.target.value)} type="email" className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 bg-transparent px-3 outline-none focus:border-emerald-500 dark:border-slate-700" placeholder="you@company.com" /></label><label className="block text-sm font-medium">Password<input required value={password} onChange={(event) => setPassword(event.target.value)} type="password" className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 bg-transparent px-3 outline-none focus:border-emerald-500 dark:border-slate-700" placeholder="••••••••" /></label><Button type="submit" disabled={saving} className="w-full">{saving ? "Signing in..." : "Sign in"}</Button></form></section>;
+}

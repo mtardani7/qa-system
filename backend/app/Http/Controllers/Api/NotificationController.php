@@ -1,0 +1,4 @@
+<?php
+namespace App\Http\Controllers\Api;
+use App\Http\Resources\NotificationResource; use Illuminate\Http\Request;
+class NotificationController extends BaseApiController { public function index(Request $request){return $this->respondWithResource(NotificationResource::collection($request->user()->notifications()->latest()->paginate(min((int)$request->input('per_page',20),100))),'Notifications retrieved successfully.');} public function read(Request $request,string $notification){$item=$request->user()->notifications()->findOrFail($notification);$item->markAsRead();return $this->respondSuccess(null,'Notification marked as read.');} public function readAll(Request $request){$request->user()->unreadNotifications->markAsRead();return $this->respondSuccess(null,'Notifications marked as read.');} }

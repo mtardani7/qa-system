@@ -1,0 +1,4 @@
+<?php
+namespace App\Http\Requests;
+use Illuminate\Foundation\Http\FormRequest; use Illuminate\Validation\Rule;
+class EnterpriseRequest extends FormRequest { public function authorize():bool{return $this->user()?->can('enterprise.manage')??false;} public function rules():array{$id=$this->route('company')?->id??($this->route('department')?->id??$this->route('holiday')?->id);$table=$this->routeIs('companies.*')?'companies':($this->routeIs('departments.*')?'departments':'holidays'); return ['code'=>['sometimes','required','string','max:30',Rule::unique($table,'code')->ignore($id)],'name'=>['required','string','max:150'],'description'=>['nullable','string','max:1000'],'address'=>['nullable','string'],'timezone'=>['nullable','timezone'],'company_id'=>['required','exists:companies,id'],'plant_id'=>['nullable','exists:plants,id'],'holiday_date'=>['nullable','date'],'is_working_day'=>['sometimes','boolean'],'is_active'=>['sometimes','boolean']];} }

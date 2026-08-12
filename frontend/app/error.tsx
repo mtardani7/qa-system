@@ -1,0 +1,2 @@
+"use client";
+export default function Error({ reset }: { error: Error & { digest?: string }; reset: () => void }) { return <main className="flex min-h-screen items-center justify-center p-6"><div className="max-w-md text-center"><h1 className="text-xl font-semibold text-slate-950 dark:text-white">Something went wrong</h1><p className="mt-2 text-sm text-slate-500">The page could not be loaded. Please try again.</p><button className="mt-6 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white" onClick={() => reset()}>Try again</button></div></main>; }
