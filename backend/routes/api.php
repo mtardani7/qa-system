@@ -62,6 +62,7 @@ Route::prefix('v1')->group(function (): void {
         Route::post('daily-reports/{daily_report}/reject', [DailyReportWorkflowController::class, 'reject']);
         Route::post('daily-reports/{daily_report}/lock', [DailyReportWorkflowController::class, 'lock']);
         Route::post('daily-reports/{daily_report}/duplicate', [DailyReportWorkflowController::class, 'duplicate']);
+        Route::delete('daily-reports/bulk', [DailyReportController::class, 'bulkDestroy']);
         Route::get('daily-reports/{daily_report}/print', [DailyReportController::class, 'print']);
         Route::apiResource('daily-reports', DailyReportController::class);
     });

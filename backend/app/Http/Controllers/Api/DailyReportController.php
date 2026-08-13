@@ -30,5 +30,14 @@ class DailyReportController extends BaseApiController
     public function show(DailyReport $dailyReport) { $this->authorize('view', $dailyReport); return $this->respondSuccess(new DailyReportResource($dailyReport->load(['plant', 'machine', 'shift', 'product', 'checker', 'checker2', 'qaChecker', 'defects.defect', 'audits.user'])), 'Daily report retrieved successfully.'); }
     public function print(DailyReport $dailyReport) { $this->authorize('view', $dailyReport); return view('daily-reports.print', ['report' => $dailyReport->load(['plant', 'line', 'machine', 'shift', 'product', 'checker', 'defects.defect'])]); }
     public function update(DailyReportRequest $request, DailyReport $dailyReport) { $this->authorize('update', $dailyReport); return $this->respondSuccess(new DailyReportResource($this->service->update($dailyReport, $request->validated())), 'Daily report updated successfully.'); }
+    public function bulkDestroy(Request $request)
+    {
+        $validated = $request->validate(['ids' => ['required', 'array', 'min:1', 'max:100'], 'ids.*' => ['integer', 'distinct', 'exists:daily_reports,id']]);
+        $reports = DailyReport::query()->whereIn('id', $validated['ids'])->get();
+        foreach ($reports as $report) $this->authorize('delete', $report);
+        $this->service->deleteMany($reports);
+        return $this->respondSuccess(null, 'Daily reports deleted successfully.');
+    }
+
     public function destroy(DailyReport $dailyReport) { $this->authorize('delete', $dailyReport); $this->service->delete($dailyReport); return $this->respondSuccess(null, 'Daily report deleted successfully.'); }
 }

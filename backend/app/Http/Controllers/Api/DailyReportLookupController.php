@@ -26,7 +26,7 @@ class DailyReportLookupController extends BaseApiController
             'machines' => Machine::query()->where('is_active', true)->when($allowedPlantIds !== null, fn ($query) => $query->whereIn('plant_id', $allowedPlantIds))->orderBy('name')->get(['id', 'plant_id', 'line_id', 'code', 'name', 'machine_number']),
             'shifts' => Shift::query()->where('is_active', true)->orderBy('name')->get(['id', 'plant_id', 'code', 'name']),
             'products' => collect(),
-            'defects' => Defect::query()->where('is_active', true)->orderBy('name')->get(['id', 'code', 'name', 'category']),
+            'defects' => Defect::query()->where('is_active', true)->orderBy('name')->get(['id', 'code', 'name', 'description', 'category']),
             'qa_checkers' => $qaCheckers,
         ], 'Daily report lookups retrieved successfully.');
     }

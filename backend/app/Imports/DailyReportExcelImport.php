@@ -30,6 +30,8 @@ class DailyReportExcelImport implements ToCollection, WithChunkReading, WithStar
     private array $defectCache = [];
     private bool $modernFormat = false;
     private array $modernPrevious = [];
+    private int $rowNumber = 0;
+    private bool $headerRead = false;
 
     public function __construct(private readonly DailyReportImport $import) {}
 
@@ -39,12 +41,21 @@ class DailyReportExcelImport implements ToCollection, WithChunkReading, WithStar
 
     public function collection(Collection $rows): void
     {
-        foreach ($rows as $offset => $row) {
-            $line = $offset + 1;
+        foreach ($rows as $row) {
+            $line = ++$this->rowNumber;
             $values = array_values($row->toArray());
-            if ($line === 1) {
-                $this->modernFormat = strtoupper(trim((string) ($values[0] ?? ''))) === 'TGL PRODUKSI';
-                continue;
+            if (!$this->headerRead) {
+                $this->modernFormat = $this->isModernHeader($values);
+                if ($this->modernFormat) {
+                    $this->headerRead = true;
+                    continue;
+                }
+                if (strtoupper(trim((string) ($values[0] ?? ''))) === 'TGL PRODUKSI') {
+                    $this->headerRead = true;
+                    continue;
+                }
+                if ($line < 9) continue;
+                $this->headerRead = true;
             }
             if (!$this->modernFormat && $line < 9) continue;
             $this->processed++;
@@ -77,6 +88,12 @@ class DailyReportExcelImport implements ToCollection, WithChunkReading, WithStar
     public function processed(): int { return $this->processed; }
 
     public function reports(): int { return $this->reports; }
+
+    private function isModernHeader(array $row): bool
+    {
+        return strtoupper(trim((string) ($row[0] ?? ''))) === 'TGL PRODUKSI'
+            && strtoupper(trim((string) ($row[3] ?? ''))) === 'TYPE PRODUK';
+    }
 
     private function consume(array $row, int $line): void
     {
@@ -113,11 +130,11 @@ class DailyReportExcelImport implements ToCollection, WithChunkReading, WithStar
             $defectName = trim((string) ($row[14] ?? ''));
             $remarks = trim((string) ($row[15] ?? ''));
 
-            if ($quantity > 0) {
-                $defect = $this->lookupDefect($defectName !== '' ? $defectName : $remarks);
+            if ($defectName !== '') {
+                $defect = $this->lookupDefect($defectName, '', $remarks);
                 $this->current['defects'][] = [
                     'defect_id' => $defect->id,
-                    'quantity' => $quantity,
+                    'quantity' => $quantity > 0 ? $quantity : null,
                     'remarks' => $remarks !== '' ? $remarks : null,
                 ];
             }
@@ -127,23 +144,32 @@ class DailyReportExcelImport implements ToCollection, WithChunkReading, WithStar
     private function consumeModern(array $row, int $line): void
     {
         if ($this->empty($row)) return;
+        $mm = $this->number($row[4] ?? null);
         foreach ([0, 1, 2, 3, 18, 19] as $index) {
             if (($row[$index] ?? null) === null || trim((string) $row[$index]) === '') $row[$index] = $this->modernPrevious[$index] ?? null;
             elseif ($row[$index] !== null && trim((string) $row[$index]) !== '') $this->modernPrevious[$index] = $row[$index];
         }
+
+        // Rows without their own MM number continue the currently open production row (extra defect/finding lines).
+        if ($mm === null) {
+            $this->consumeModernContinuation($row);
+            return;
+        }
+
         $machine = trim((string) ($row[2] ?? ''));
-        $mm = $this->number($row[4] ?? null);
-        if ($machine === '' || $mm === null) throw new \RuntimeException('Production row is missing machine or MM number.');
+        if ($machine === '') throw new \RuntimeException('Production row is missing machine or MM number.');
 
         $this->flush();
         $productName = trim((string) ($row[5] ?? ''));
         $qtyPerBox = (int) ($row[7] ?? 0);
-        $defectName = trim((string) ($row[15] ?? ''));
+        $defectName = trim((string) ($row[14] ?? ''));
+        $defectDescription = trim((string) ($row[15] ?? ''));
+        $defectCategory = trim((string) ($row[16] ?? ''));
         $quantity = (int) ($row[13] ?? 0);
         $defects = [];
-        if ($quantity > 0 && $defectName !== '') {
-            $defect = $this->lookupDefect($defectName);
-            $defects[] = ['defect_id' => $defect->id, 'quantity' => $quantity, 'remarks' => trim((string) ($row[14] ?? '')) ?: null];
+        if ($defectName !== '') {
+            $defect = $this->lookupDefect($defectName, $defectCategory, $defectDescription);
+            $defects[] = ['defect_id' => $defect->id, 'quantity' => $quantity > 0 ? $quantity : null, 'remarks' => $defectDescription !== '' ? $defectDescription : null];
         }
         $this->current = [
             'line' => $line,
@@ -152,15 +178,31 @@ class DailyReportExcelImport implements ToCollection, WithChunkReading, WithStar
             'machine' => $this->lookupMachine($machine),
             'product' => $this->lookupProduct($mm, $productName, $qtyPerBox),
             'product_type' => trim((string) ($row[3] ?? 'FG')) ?: 'FG',
+            'category' => trim((string) ($row[16] ?? '')) ?: null,
             'po_number' => $this->number($row[6] ?? null) ?? ('IMPORT-'.$line),
-            'output_box' => (int) ($row[9] ?? 0),
+            'output_box' => (int) ($row[7] ?? 0),
             'checker' => $this->lookupChecker($row[18] ?? null),
             'checker_2' => trim((string) ($row[19] ?? '')) !== '' ? $this->lookupChecker($row[19]) : null,
             'finding_range_box' => implode(' ', array_filter(array_map(fn ($value) => trim((string) $value), array_slice($row, 10, 3)))),
-            'finding_observation' => trim((string) ($row[14] ?? '')) ?: null,
+            'finding_observation' => null,
             'result' => trim((string) ($row[17] ?? '')) ?: null,
             'defects' => $defects,
         ];
+    }
+
+    // Adds a defect/finding line to the currently open production row; rows with no MM carry no new production data.
+    private function consumeModernContinuation(array $row): void
+    {
+        if ($this->current === null) return;
+
+        $quantity = (int) ($row[13] ?? 0);
+        $defectName = trim((string) ($row[14] ?? ''));
+        $defectDescription = trim((string) ($row[15] ?? ''));
+        $defectCategory = trim((string) ($row[16] ?? ''));
+        if ($defectName !== '') {
+            $defect = $this->lookupDefect($defectName, $defectCategory, $defectDescription);
+            $this->current['defects'][] = ['defect_id' => $defect->id, 'quantity' => $quantity > 0 ? $quantity : null, 'remarks' => $defectDescription !== '' ? $defectDescription : null];
+        }
     }
 
     private function flush(): void
@@ -171,31 +213,64 @@ class DailyReportExcelImport implements ToCollection, WithChunkReading, WithStar
 
         $current = $this->current;
         $this->current = null;
+        $defects = [];
+        foreach ($current['defects'] as $defect) {
+            $key = (int) $defect['defect_id'];
+            if (!isset($defects[$key])) {
+                $defects[$key] = $defect;
+                continue;
+            }
+            if ($defect['quantity'] !== null) {
+                $defects[$key]['quantity'] = ($defects[$key]['quantity'] ?? 0) + $defect['quantity'];
+            }
+            if ($defect['remarks'] !== null && $defect['remarks'] !== '') {
+                $defects[$key]['remarks'] = trim(($defects[$key]['remarks'] ?? '').' '.$defect['remarks']);
+            }
+        }
+        $current['defects'] = array_values($defects);
 
         DB::transaction(function () use ($current): void {
-            $report = DailyReport::create([
+            $attributes = [
                 'plant_id' => $this->import->plant_id,
                 'line_id' => $this->import->line_id,
                 'machine_id' => $current['machine']->id,
                 'shift_id' => $current['shift']->id,
                 'product_id' => $current['product']->id,
                 'mm_number' => $current['product']->mm_number,
-                'checker_id' => $current['checker']->id,
+                'checker_id' => $current['checker']?->id,
                 'checker_2_id' => ($current['checker_2'] ?? null)?->id,
                 'product_type' => $current['product_type'] ?? null,
+                'category' => $current['category'] ?? null,
                 'production_date' => $current['production_date'],
                 'po_number' => $current['po_number'],
                 'output_box' => $current['output_box'],
                 'qty_per_box' => $current['product']->qty_per_box,
                 'output_pcs' => $current['output_box'] * $current['product']->qty_per_box,
-                'quantity_defect' => array_sum(array_column($current['defects'], 'quantity')),
+                'quantity_defect' => array_sum(array_map(fn ($defect) => $defect['quantity'] ?? 0, $current['defects'])),
                 'finding_range_box' => $current['finding_range_box'] ?? null,
                 'finding_observation' => $current['finding_observation'] ?? null,
                 'result' => $current['result'] ?? null,
                 'status' => 'draft',
                 'created_by' => $this->import->created_by,
                 'updated_by' => $this->import->created_by,
-            ]);
+            ];
+
+            $report = DailyReport::query()
+                ->where('plant_id', $attributes['plant_id'])
+                ->whereDate('production_date', $attributes['production_date'])
+                ->where('shift_id', $attributes['shift_id'])
+                ->where('machine_id', $attributes['machine_id'])
+                ->where('product_id', $attributes['product_id'])
+                ->where('po_number', $attributes['po_number'])
+                ->oldest('id')
+                ->first();
+
+            if ($report) {
+                $report->update($attributes);
+                $report->defects()->delete();
+            } else {
+                $report = DailyReport::create($attributes);
+            }
 
             foreach ($current['defects'] as $defect) {
                 DailyReportDefect::create([
@@ -251,9 +326,10 @@ class DailyReportExcelImport implements ToCollection, WithChunkReading, WithStar
             ->firstOrFail();
     }
 
-    private function lookupChecker(mixed $value): QaChecker
+    private function lookupChecker(mixed $value): ?QaChecker
     {
         $value = trim((string) $value);
+        if ($value === '') return null;
         $key = strtolower($value);
 
         return $this->checkerCache[$key] ??= QaChecker::query()
@@ -263,14 +339,34 @@ class DailyReportExcelImport implements ToCollection, WithChunkReading, WithStar
             ->firstOrFail();
     }
 
-    private function lookupDefect(string $value): Defect
+    private function lookupDefect(string $value, string $category = '', string $description = ''): Defect
     {
         $key = strtolower($value);
 
-        return $this->defectCache[$key] ??= Defect::query()
+        if (isset($this->defectCache[$key])) {
+            return $this->defectCache[$key];
+        }
+
+        $defect = Defect::withTrashed()
             ->where('is_active', true)
-            ->whereRaw('LOWER(name) = ?', [$key])
-            ->firstOrFail();
+            ->where(function ($query) use ($key): void {
+                $query->whereRaw('LOWER(name) = ?', [$key])
+                    ->orWhereRaw('LOWER(description) = ?', [$key])
+                    ->orWhereRaw('LOWER(code) = ?', [$key]);
+            })
+            ->orderByRaw('CASE WHEN LOWER(name) = ? THEN 0 ELSE 1 END', [$key])
+            ->first();
+
+        if (!$defect) {
+            $defect = Defect::withTrashed()->updateOrCreate(
+                ['name' => $value],
+                ['code' => 'IMPORT-'.strtoupper(substr(sha1($key), 0, 10)), 'description' => $description !== '' ? $description : $value, 'category' => $category !== '' ? $category : '-', 'is_active' => true],
+            );
+        } elseif ($defect->trashed()) {
+            $defect->restore();
+        }
+
+        return $this->defectCache[$key] = $defect;
     }
 
     private function date(mixed $value): string

@@ -21,7 +21,7 @@ export default function DailyReportDetailPage() {
   if (!report) return <main className="p-8 text-sm text-destructive">Report not found.</main>;
 
   const print = async () => {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1"}/daily-reports/${id}/print`, { headers: { Authorization: `Bearer ${localStorage.getItem("qms_token") ?? ""}` } });
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "/api/v1"}/daily-reports/${id}/print`, { headers: { Authorization: `Bearer ${localStorage.getItem("qms_token") ?? ""}` } });
     window.open(URL.createObjectURL(await response.blob()), "_blank");
   };
 
@@ -41,7 +41,6 @@ export default function DailyReportDetailPage() {
     { label: "Output PCS", value: report.output_pcs.toLocaleString() },
     { label: "Findings Range (Box)", value: report.finding_range_box ?? "-" },
     { label: "Findings Quantity (PCS)", value: report.total_defect.toLocaleString() },
-    { label: "Finding During Checking", value: report.finding_observation ?? "-", wide: true },
     { label: "Remarks", value: report.remarks ?? "-", wide: true },
     { label: "Result", value: report.result ?? "-" },
     { label: "Status", value: report.status, status: true },
@@ -83,7 +82,7 @@ export default function DailyReportDetailPage() {
             <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
               <table className="w-full min-w-[620px] text-left text-sm">
                 <thead className="bg-slate-50 text-xs uppercase tracking-wide text-muted-foreground dark:bg-slate-950/50"><tr><th className="px-4 py-3 font-medium">Defect</th><th className="px-4 py-3 font-medium">Category</th><th className="px-4 py-3 text-right font-medium">Quantity</th><th className="px-4 py-3 font-medium">Remarks</th></tr></thead>
-                <tbody>{report.defects.map((item) => <tr key={item.id} className="border-t border-slate-200 dark:border-slate-800"><td className="px-4 py-3 font-medium">{item.defect.name}</td><td className="px-4 py-3 text-muted-foreground">{item.defect.category}</td><td className="px-4 py-3 text-right font-semibold tabular-nums">{item.quantity.toLocaleString()}</td><td className="px-4 py-3 text-muted-foreground">{item.remarks || "-"}</td></tr>)}</tbody>
+                <tbody>{report.defects.map((item) => <tr key={item.id} className="border-t border-slate-200 dark:border-slate-800"><td className="px-4 py-3 font-medium">{item.remarks || item.defect.description || item.defect.name}</td><td className="px-4 py-3 text-muted-foreground">{item.defect.category}</td><td className="px-4 py-3 text-right font-semibold tabular-nums">{item.quantity?.toLocaleString() ?? "-"}</td><td className="px-4 py-3 text-muted-foreground">{item.remarks || "-"}</td></tr>)}</tbody>
               </table>
             </div>
           </div>

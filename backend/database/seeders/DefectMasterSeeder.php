@@ -40,7 +40,7 @@ class DefectMasterSeeder extends Seeder
         foreach ($defects as $index => [$name, $category]) {
             Defect::updateOrCreate(
                 ['code' => sprintf('DEF-%03d', $index + 1)],
-                ['name' => $name, 'category' => $category, 'is_active' => true],
+                ['name' => $name, 'description' => $name, 'category' => $category, 'is_active' => true],
             );
         }
     }

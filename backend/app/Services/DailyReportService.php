@@ -43,11 +43,19 @@ final class DailyReportService extends BaseService
 
     public function delete(Model $model): void
     {
-        DB::transaction(function () use ($model): void {
-            $report = $model instanceof DailyReport ? $model : DailyReport::query()->findOrFail($model->getKey());
-            $old = $report->only(['status', 'po_number', 'output_pcs']);
-            $this->repository->delete($report);
-            $this->audits->record(null, 'delete', $old, null);
+        $this->deleteMany([$model]);
+    }
+
+    public function deleteMany(iterable $models): void
+    {
+        DB::transaction(function () use ($models): void {
+            foreach ($models as $model) {
+                $report = $model instanceof DailyReport ? $model : DailyReport::query()->findOrFail($model->getKey());
+                $old = $report->only(['status', 'po_number', 'output_pcs']);
+                $report->defects()->delete();
+                $this->repository->delete($report);
+                $this->audits->record(null, 'delete', $old, null);
+            }
         });
     }
 

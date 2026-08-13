@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\DailyReport;
+use App\Models\DailyReportDefect;
 use App\Models\Defect;
 use App\Models\Machine;
 use App\Models\Line;
@@ -62,6 +63,28 @@ class DailyReportApiTest extends TestCase
 
         $this->actingAs($user)->getJson('/api/v1/daily-reports?plant_id='.$plant->id.'&search=MM-SEARCH&per_page=2')
             ->assertOk()->assertJsonPath('success', true)->assertJsonCount(2, 'data');
+    }
+
+    public function test_daily_report_can_be_deleted_with_its_defects(): void
+    {
+        $user = $this->userWithPermissions(['daily-reports.delete']);
+        $plant = Plant::factory()->create();
+        $user->plants()->attach($plant->id);
+        $report = DailyReport::factory()->create(['plant_id' => $plant->id, 'status' => 'draft']);
+        $defect = Defect::factory()->create();
+        $detail = DailyReportDefect::query()->create([
+            'daily_report_id' => $report->id,
+            'defect_id' => $defect->id,
+            'quantity' => 1,
+        ]);
+
+        $this->actingAs($user)->deleteJson('/api/v1/daily-reports/'.$report->id)
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        $this->assertDatabaseMissing('daily_reports', ['id' => $report->id]);
+        $this->assertDatabaseMissing('daily_report_defects', ['id' => $detail->id]);
+        $this->assertDatabaseHas('daily_report_audits', ['action' => 'delete', 'daily_report_id' => null]);
     }
 
     private function userWithPermissions(array $permissions): User

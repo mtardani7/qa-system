@@ -24,7 +24,7 @@ class DailyReportResource extends JsonResource
             'output_box' => $this->output_box,
             'qty_per_box' => $this->qty_per_box,
             'output_pcs' => $this->output_pcs,
-            'defects' => $this->defects->map(fn ($item) => ['id' => $item->id, 'defect_id' => $item->defect_id, 'defect' => ['id' => $item->defect?->id, 'code' => $item->defect?->code, 'name' => $item->defect?->name, 'category' => $item->defect?->category], 'quantity' => $item->quantity, 'remarks' => $item->remarks])->values(),
+            'defects' => $this->defects->map(fn ($item) => ['id' => $item->id, 'defect_id' => $item->defect_id, 'defect' => ['id' => $item->defect?->id, 'code' => $item->defect?->code, 'name' => $item->defect?->name, 'description' => $item->defect?->description, 'category' => $item->defect?->category], 'quantity' => $item->quantity, 'remarks' => $item->remarks])->values(),
             'total_defect' => $this->defects->sum('quantity'),
             'defect' => $this->defect ? ['id' => $this->defect->id, 'code' => $this->defect->code, 'name' => $this->defect->name, 'category' => $this->defect->category] : null,
             'quantity_defect' => $this->quantity_defect,

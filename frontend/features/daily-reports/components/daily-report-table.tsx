@@ -18,7 +18,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -37,6 +37,7 @@ import type { DailyReport, DailyReportStatus } from "../types";
 
 type Props = { onEdit?: (report: DailyReport) => void };
 type ReportPeriod = "daily" | "weekly" | "monthly" | "yearly";
+type DeleteRequest = { ids: number[]; label: string };
 type SortField =
   | "production_date"
   | "po_number"
@@ -113,6 +114,8 @@ export function DailyReportTable({ onEdit }: Props) {
   });
   const deleteMutation = useDeleteDailyReport();
   const bulkDelete = useBulkDeleteDailyReports();
+  const [deleteRequest, setDeleteRequest] = useState<DeleteRequest | null>(null);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
   const workflow = useDailyReportWorkflow();
   const bulkWorkflow = useBulkDailyReportWorkflow();
   const duplicate = useDuplicateDailyReport();
@@ -195,8 +198,17 @@ export function DailyReportTable({ onEdit }: Props) {
   };
   const runBulkDelete = () => {
     const draftIds = selectedRows.filter((row) => row.status === "draft").map((row) => row.id);
-    if (draftIds.length && window.confirm(`Delete ${draftIds.length} selected report(s)?`))
-      bulkDelete.mutate(draftIds, { onSuccess: () => setSelectedIds([]) });
+    if (draftIds.length) setDeleteRequest({ ids: draftIds, label: `${draftIds.length} selected report(s)` });
+  };
+  const confirmDelete = () => {
+    if (!deleteRequest) return;
+    const request = deleteRequest;
+    setDeleteRequest(null);
+    if (request.ids.length > 1) bulkDelete.mutate(request.ids, { onSuccess: () => setSelectedIds([]) });
+    else deleteMutation.mutate(request.ids[0]);
+  };
+  const scrollTable = (direction: "left" | "right") => {
+    tableScrollRef.current?.scrollBy({ left: direction === "right" ? 640 : -640, behavior: "smooth" });
   };
   const print = async (id: number) => {
     const blob = await printDailyReport(id);
@@ -344,7 +356,14 @@ export function DailyReportTable({ onEdit }: Props) {
         </p>
       ) : (
         <>
-          <div className="overflow-x-auto">
+          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-2 dark:border-slate-800">
+            <p className="text-xs text-muted-foreground">Daily report columns</p>
+            <div className="flex items-center gap-1">
+              <Button type="button" variant="outline" size="icon-sm" onClick={() => scrollTable("left")} aria-label="Scroll table left" title="Scroll table left"><ChevronLeft className="size-4" /></Button>
+              <Button type="button" variant="outline" size="icon-sm" onClick={() => scrollTable("right")} aria-label="Scroll table right" title="Scroll table right"><ChevronRight className="size-4" /></Button>
+            </div>
+          </div>
+          <div ref={tableScrollRef} className="overflow-x-auto" onWheel={(event) => { if (event.deltaY !== 0 && event.deltaX === 0) { event.currentTarget.scrollLeft += event.deltaY; event.preventDefault(); } }}>
             <table className="w-full min-w-[1900px] text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-muted-foreground dark:bg-slate-950/40">
                 <tr>
@@ -385,10 +404,9 @@ export function DailyReportTable({ onEdit }: Props) {
                   </th>
                   <th className="px-4 py-3">Findings Range (Box)</th>
                   <th className="px-4 py-3 text-right">Findings Quantity (PCS)</th>
-                  <th className="px-4 py-3">Findings During Checking</th>
                   <th className="px-4 py-3">Defect Description</th>
                   <th className="px-4 py-3">Defect Category</th>
-                  <th className="px-4 py-3">Result / Status</th>
+                  <th className="px-4 py-3">Result</th>
                   <th className="px-4 py-3">Checked by QA 1</th>
                   <th className="px-4 py-3">Checked by QA 2</th>
                   <th className="px-4 py-3 text-right">Actions</th>
@@ -418,10 +436,9 @@ export function DailyReportTable({ onEdit }: Props) {
                     </td>
                     <td className="px-4 py-4">{report.finding_range_box ?? "-"}</td>
                     <td className="px-4 py-4 text-right">{report.total_defect.toLocaleString()}</td>
-                    <td className="px-4 py-4">{report.finding_observation || report.defects.map((item) => item.defect.name).join(", ") || "-"}</td>
-                    <td className="px-4 py-4">{report.defects.map((item) => item.remarks).filter(Boolean).join(", ") || "-"}</td>
+                    <td className="px-4 py-4">{report.defects.map((item) => item.remarks || item.defect.description || item.defect.name).filter(Boolean).join(", ") || "-"}</td>
                     <td className="px-4 py-4">{report.defects.map((item) => item.defect.category).filter(Boolean).join(", ") || "-"}</td>
-                    <td className="px-4 py-4">{report.result ?? statusLabel[report.status]}</td>
+                    <td className="px-4 py-4">{report.result ?? "-"}</td>
                     <td className="px-4 py-4">{report.checker.name ?? "-"}</td>
                     <td className="px-4 py-4">{report.qa_checker_2?.name ?? "-"}</td>
                     <td className="px-4 py-4">
@@ -540,12 +557,7 @@ export function DailyReportTable({ onEdit }: Props) {
                             variant="ghost"
                             size="icon-sm"
                             className="text-rose-600"
-                            onClick={() => {
-                              if (
-                                window.confirm("Delete this Daily QA Report?")
-                              )
-                                deleteMutation.mutate(report.id);
-                            }}
+                            onClick={() => setDeleteRequest({ ids: [report.id], label: "this Daily QA Report" })}
                             disabled={deleteMutation.isPending}
                             aria-label="Delete report"
                           >
@@ -586,6 +598,18 @@ export function DailyReportTable({ onEdit }: Props) {
             </div>
           </div>
         </>
+      )}
+      {deleteRequest && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true" aria-labelledby="delete-daily-report-title">
+          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900">
+            <h2 id="delete-daily-report-title" className="text-lg font-semibold">Delete daily report?</h2>
+            <p className="mt-2 text-sm text-muted-foreground">Are you sure you want to delete {deleteRequest.label}? This action cannot be undone.</p>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setDeleteRequest(null)} disabled={deleteMutation.isPending || bulkDelete.isPending}>Cancel</Button>
+              <Button type="button" className="bg-rose-600 text-white hover:bg-rose-700" onClick={confirmDelete} disabled={deleteMutation.isPending || bulkDelete.isPending}><Trash2 className="size-4" /> Delete</Button>
+            </div>
+          </div>
+        </div>
       )}
     </section>
   );

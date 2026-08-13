@@ -7,8 +7,11 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
+use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use App\Support\ApiResponse;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -39,6 +42,15 @@ return Application::configure(basePath: dirname(__DIR__))
         });
         $exceptions->render(function (NotFoundHttpException $exception, Request $request) {
             if ($request->is('api/*')) return ApiResponse::error('The requested resource was not found.', [], 404);
+        });
+        $exceptions->render(function (TooManyRequestsHttpException $exception, Request $request) {
+            if ($request->is('api/*')) return ApiResponse::error('Too many requests. Please try again shortly.', [], 429);
+        });
+        $exceptions->render(function (ThrottleRequestsException $exception, Request $request) {
+            if ($request->is('api/*')) return ApiResponse::error('Too many requests. Please try again shortly.', [], 429);
+        });
+        $exceptions->render(function (HttpExceptionInterface $exception, Request $request) {
+            if ($request->is('api/*')) return ApiResponse::error($exception->getMessage() ?: 'Request failed.', [], $exception->getStatusCode());
         });
         $exceptions->render(function (\Throwable $exception, Request $request) {
             if ($request->is('api/*')) return ApiResponse::error('An unexpected server error occurred.', [], 500);
