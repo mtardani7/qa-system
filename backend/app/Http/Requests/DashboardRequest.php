@@ -14,6 +14,7 @@ class DashboardRequest extends FormRequest
     {
         $data = $this->validated(); $date = CarbonImmutable::parse($data['date'] ?? now()->toDateString()); $period = $data['period'] ?? 'daily';
         [$from, $to] = match ($period) { 'weekly' => [$date->startOfWeek(), $date->endOfWeek()], 'monthly' => [$date->startOfMonth(), $date->endOfMonth()], 'yearly' => [$date->startOfYear(), $date->endOfYear()], default => [$date, $date] };
-        return new DashboardFilters($date, $data['plant_id'] ?? null, $data['shift_id'] ?? null, $data['machine_id'] ?? null, $data['line_id'] ?? null, $data['product_id'] ?? null, $data['checker_id'] ?? null, $from, $to, $period);
+        $scopePlantIds = $this->user()?->hasRole('Super Admin') ? null : $this->user()?->plants()->where('plants.is_active', true)->pluck('plants.id')->all();
+        return new DashboardFilters($date, $data['plant_id'] ?? null, $data['shift_id'] ?? null, $data['machine_id'] ?? null, $data['line_id'] ?? null, $data['product_id'] ?? null, $data['checker_id'] ?? null, $from, $to, $period, $scopePlantIds);
     }
 }

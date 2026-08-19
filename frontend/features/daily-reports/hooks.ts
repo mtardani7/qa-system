@@ -1,13 +1,14 @@
 "use client";
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { bulkDeleteDailyReports, createDailyReport, deleteDailyReport, duplicateDailyReport, getDailyReport, getDailyReportExport, getDailyReportImport, getDailyReportLookups, getDailyReportProducts, getDailyReports, importDailyReports, queueDailyReportExport, updateDailyReport, workflowDailyReport, type DailyReportPayload, type DailyReportQuery } from "./services";
+import { bulkDeleteDailyReports, createDailyReport, deleteDailyReport, duplicateDailyReport, getDailyReport, getDailyReportExport, getDailyReportImport, getDailyReportLookups, getDailyReportProducts, getDailyReports, importDailyReports, pasteDailyReports, queueDailyReportExport, updateDailyReport, workflowDailyReport, type DailyReportPayload, type DailyReportQuery } from "./services";
 
 export const dailyReportKeys = { all: ["daily-reports"] as const, list: (query: DailyReportQuery) => ["daily-reports", "list", query] as const, lookups: ["daily-reports", "lookups"] as const };
 export function useDailyReports(query: DailyReportQuery) { return useQuery({ queryKey: dailyReportKeys.list(query), queryFn: () => getDailyReports(query), placeholderData: keepPreviousData, staleTime: 30_000 }); }
 export function useDailyReportLookups() { return useQuery({ queryKey: dailyReportKeys.lookups, queryFn: getDailyReportLookups, staleTime: 300_000 }); }
 export function useDailyReportProducts(search: string) { return useQuery({ queryKey: ["daily-reports", "products", search], queryFn: () => getDailyReportProducts(search), staleTime: 300_000 }); }
 export function useCreateDailyReport() { const client = useQueryClient(); return useMutation({ mutationFn: (payload: DailyReportPayload) => createDailyReport(payload), onSuccess: () => client.invalidateQueries({ queryKey: dailyReportKeys.all }) }); }
+export function usePasteDailyReports() { const client = useQueryClient(); return useMutation({ mutationFn: (payloads: DailyReportPayload[]) => pasteDailyReports(payloads), onSuccess: () => client.invalidateQueries({ queryKey: dailyReportKeys.all }) }); }
 export function useUpdateDailyReport() { const client = useQueryClient(); return useMutation({ mutationFn: ({ id, payload }: { id: number; payload: DailyReportPayload }) => updateDailyReport(id, payload), onSuccess: () => client.invalidateQueries({ queryKey: dailyReportKeys.all }) }); }
 export function useDeleteDailyReport() { const client = useQueryClient(); return useMutation({ mutationFn: (id: number) => deleteDailyReport(id), onSuccess: () => client.invalidateQueries({ queryKey: dailyReportKeys.all }) }); }
 export function useBulkDeleteDailyReports() { const client = useQueryClient(); return useMutation({ mutationFn: (ids: number[]) => bulkDeleteDailyReports(ids), onSuccess: () => client.invalidateQueries({ queryKey: dailyReportKeys.all }) }); }

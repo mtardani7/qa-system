@@ -42,7 +42,7 @@ class DatabaseSeeder extends Seeder
         $qaManager = Role::firstOrCreate(['name' => 'QA Manager', 'guard_name' => 'web']);
         $qaManager->syncPermissions(['dashboard.view', 'daily-reports.view', 'daily-reports.review', 'daily-reports.approve', 'daily-reports.reject', 'daily-reports.lock', 'daily-reports.export', 'audit.view']);
         $management = Role::firstOrCreate(['name' => 'Management', 'guard_name' => 'web']);
-        $management->syncPermissions(['dashboard.view', 'daily-reports.view', 'daily-reports.export']);
+        $management->syncPermissions(array_values(array_filter($permissions, fn (string $permission): bool => !str_starts_with($permission, 'users.'))));
         $production = Role::firstOrCreate(['name' => 'Production', 'guard_name' => 'web']);
         $production->syncPermissions(['dashboard.view', 'daily-reports.view']);
         $seedUsers = [

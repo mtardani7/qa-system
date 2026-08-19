@@ -13,6 +13,11 @@ export async function getDailyReports(params: DailyReportQuery = {}) { const que
 export async function getDailyReportLookups() { const { data } = await apiClient.get<ApiResponse<DailyReportLookups>>("/daily-reports/lookups"); return data.data; }
 export async function getDailyReportProducts(search = "") { const { data } = await apiClient.get<ApiResponse<DailyReportLookups["products"]>>("/daily-reports/lookups/products", { params: { search } }); return data.data; }
 export async function createDailyReport(payload: DailyReportPayload) { const { data } = await apiClient.post<ApiResponse<DailyReport>>("/daily-reports", payload); return data.data; }
+export async function pasteDailyReports(payloads: DailyReportPayload[]) {
+	const reports: DailyReport[] = [];
+	for (const payload of payloads) reports.push(await createDailyReport(payload));
+	return reports;
+}
 export async function updateDailyReport(id: number, payload: DailyReportPayload) { const { data } = await apiClient.put<ApiResponse<DailyReport>>(`/daily-reports/${id}`, payload); return data.data; }
 export async function deleteDailyReport(id: number) { await apiClient.delete(`/daily-reports/${id}`); }
 export async function bulkDeleteDailyReports(ids: number[]) { await apiClient.delete("/daily-reports/bulk", { data: { ids } }); }
@@ -22,4 +27,5 @@ export async function duplicateDailyReport(id: number) { const { data } = await 
 export async function printDailyReport(id: number) { const { data } = await apiClient.get<Blob>(`/daily-reports/${id}/print`, { responseType: "blob" }); return data; }
 export async function queueDailyReportExport(filters: Record<string, number | string | undefined>) { const { data } = await apiClient.post<ApiResponse<DailyReportExport>>("/daily-reports/export", filters); return data.data; }
 export async function getDailyReportExport(id: number) { const { data } = await apiClient.get<ApiResponse<DailyReportExport>>(`/daily-reports/exports/${id}`); return data.data; }
+export async function downloadDailyReportExport(id: number) { const { data } = await apiClient.get<Blob>(`/daily-reports/exports/${id}/download`, { responseType: "blob" }); return data; }
 export function dailyReportExportDownloadUrl(id: number) { return `${apiClient.defaults.baseURL}/daily-reports/exports/${id}/download`; }

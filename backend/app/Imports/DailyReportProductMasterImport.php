@@ -62,7 +62,8 @@ class DailyReportProductMasterImport implements ToCollection, WithStartRow
 
 	private function text(mixed $value): string
 	{
-		return trim(str_replace(["\xc2\xa0", "\xa0"], ' ', (string) $value));
+		$value = trim(str_replace(["\xc2\xa0", "\xa0"], ' ', (string) $value));
+		return str_starts_with($value, '=') ? '' : $value;
 	}
 
 	private function key(mixed $value): string

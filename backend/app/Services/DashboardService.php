@@ -21,8 +21,8 @@ final class DashboardService
             $defect['cumulative_percentage'] = $totalTopDefects > 0 ? round(($running / $totalTopDefects) * 100, 2) : 0;
             return $defect;
         }, $topDefects);
-        $todayFilters = new DashboardFilters(now()->toImmutable(), $filters->plantId, $filters->shiftId, $filters->machineId, $filters->lineId, $filters->productId, $filters->checkerId, now()->toImmutable(), now()->toImmutable(), 'daily');
-        $monthlyFilters = new DashboardFilters(now()->toImmutable(), $filters->plantId, $filters->shiftId, $filters->machineId, $filters->lineId, $filters->productId, $filters->checkerId, now()->startOfMonth()->toImmutable(), now()->endOfMonth()->toImmutable(), 'monthly');
+        $todayFilters = new DashboardFilters(now()->toImmutable(), $filters->plantId, $filters->shiftId, $filters->machineId, $filters->lineId, $filters->productId, $filters->checkerId, now()->toImmutable(), now()->toImmutable(), 'daily', $filters->scopePlantIds);
+        $monthlyFilters = new DashboardFilters(now()->toImmutable(), $filters->plantId, $filters->shiftId, $filters->machineId, $filters->lineId, $filters->productId, $filters->checkerId, now()->startOfMonth()->toImmutable(), now()->endOfMonth()->toImmutable(), 'monthly', $filters->scopePlantIds);
         $today = $this->dashboard->periodSummary($todayFilters); $monthly = $this->dashboard->periodSummary($monthlyFilters);
         return [
             'date' => $filters->date->toDateString(),

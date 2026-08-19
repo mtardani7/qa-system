@@ -29,6 +29,7 @@ class DailyReportExcelImport implements ToCollection, WithChunkReading, WithStar
     private array $checkerCache = [];
     private array $defectCache = [];
     private bool $modernFormat = false;
+    private bool $modernFormatWithoutDate = false;
     private array $modernPrevious = [];
     private int $rowNumber = 0;
     private bool $headerRead = false;
@@ -46,6 +47,11 @@ class DailyReportExcelImport implements ToCollection, WithChunkReading, WithStar
             $values = array_values($row->toArray());
             if (!$this->headerRead) {
                 $this->modernFormat = $this->isModernHeader($values);
+                if ($this->isModernHeaderWithoutDate($values)) {
+                    $this->modernFormat = true;
+                    $this->modernFormatWithoutDate = true;
+                    $values = $this->normalizeModernRow($values);
+                }
                 if ($this->modernFormat) {
                     $this->headerRead = true;
                     continue;
@@ -57,6 +63,9 @@ class DailyReportExcelImport implements ToCollection, WithChunkReading, WithStar
                 if ($line < 9) continue;
                 $this->headerRead = true;
             }
+            if ($this->modernFormatWithoutDate) {
+                $values = $this->normalizeModernRow($values);
+            }
             if (!$this->modernFormat && $line < 9) continue;
             $this->processed++;
 
@@ -64,7 +73,12 @@ class DailyReportExcelImport implements ToCollection, WithChunkReading, WithStar
                 $this->modernFormat ? $this->consumeModern($values, $line) : $this->consume($values, $line);
             } catch (\Throwable $exception) {
                 $this->errors[] = ['row' => $line, 'message' => $exception->getMessage()];
-                $this->flush();
+                try {
+                    while (DB::connection()->transactionLevel() > 0) DB::rollBack();
+                    DB::connection()->reconnect();
+                } catch (\Throwable) {
+                    // The row error is already recorded; the next row gets a fresh connection when possible.
+                }
             }
         }
 
@@ -93,6 +107,18 @@ class DailyReportExcelImport implements ToCollection, WithChunkReading, WithStar
     {
         return strtoupper(trim((string) ($row[0] ?? ''))) === 'TGL PRODUKSI'
             && strtoupper(trim((string) ($row[3] ?? ''))) === 'TYPE PRODUK';
+    }
+
+    private function isModernHeaderWithoutDate(array $row): bool
+    {
+        return strtoupper(trim((string) ($row[0] ?? ''))) === 'SHIFT'
+            && strtoupper(trim((string) ($row[2] ?? ''))) === 'TYPE PRODUK';
+    }
+
+    private function normalizeModernRow(array $row): array
+    {
+        array_unshift($row, $this->import->created_at?->toDateString() ?? now()->toDateString());
+        return $row;
     }
 
     private function consume(array $row, int $line): void
@@ -144,6 +170,18 @@ class DailyReportExcelImport implements ToCollection, WithChunkReading, WithStar
     private function consumeModern(array $row, int $line): void
     {
         if ($this->empty($row)) return;
+        $rawMachine = trim((string) ($row[2] ?? ''));
+        $rawMm = $this->number($row[4] ?? null);
+        $rawPo = $this->number($row[6] ?? null);
+        $rawDate = $row[0] ?? null;
+        if ($this->current !== null && $rawDate !== null && trim((string) $rawDate) !== '') {
+            $rowDate = $this->date($rawDate);
+            if ($rowDate !== $this->current['production_date']) $this->flush();
+        }
+        if ($this->current !== null && ($rawMachine === '' || $rawMm === null || $rawPo === null)) {
+            $this->consumeModernContinuation($row);
+            return;
+        }
         $mm = $this->number($row[4] ?? null);
         foreach ([0, 1, 2, 3, 18, 19] as $index) {
             if (($row[$index] ?? null) === null || trim((string) $row[$index]) === '') $row[$index] = $this->modernPrevious[$index] ?? null;
@@ -160,11 +198,11 @@ class DailyReportExcelImport implements ToCollection, WithChunkReading, WithStar
         if ($machine === '') throw new \RuntimeException('Production row is missing machine or MM number.');
 
         $this->flush();
-        $productName = trim((string) ($row[5] ?? ''));
+        $productName = $this->excelText($row[5] ?? null);
         $qtyPerBox = (int) ($row[7] ?? 0);
         $defectName = trim((string) ($row[14] ?? ''));
         $defectDescription = trim((string) ($row[15] ?? ''));
-        $defectCategory = trim((string) ($row[16] ?? ''));
+        $defectCategory = $this->category($row[16] ?? null);
         $quantity = (int) ($row[13] ?? 0);
         $defects = [];
         if ($defectName !== '') {
@@ -178,7 +216,7 @@ class DailyReportExcelImport implements ToCollection, WithChunkReading, WithStar
             'machine' => $this->lookupMachine($machine),
             'product' => $this->lookupProduct($mm, $productName, $qtyPerBox),
             'product_type' => trim((string) ($row[3] ?? 'FG')) ?: 'FG',
-            'category' => trim((string) ($row[16] ?? '')) ?: null,
+            'category' => $defectCategory ?: null,
             'po_number' => $this->number($row[6] ?? null) ?? ('IMPORT-'.$line),
             'output_box' => (int) ($row[7] ?? 0),
             'checker' => $this->lookupChecker($row[18] ?? null),
@@ -198,7 +236,7 @@ class DailyReportExcelImport implements ToCollection, WithChunkReading, WithStar
         $quantity = (int) ($row[13] ?? 0);
         $defectName = trim((string) ($row[14] ?? ''));
         $defectDescription = trim((string) ($row[15] ?? ''));
-        $defectCategory = trim((string) ($row[16] ?? ''));
+        $defectCategory = $this->category($row[16] ?? null);
         if ($defectName !== '') {
             $defect = $this->lookupDefect($defectName, $defectCategory, $defectDescription);
             $this->current['defects'][] = ['defect_id' => $defect->id, 'quantity' => $quantity > 0 ? $quantity : null, 'remarks' => $defectDescription !== '' ? $defectDescription : null];
@@ -302,13 +340,29 @@ class DailyReportExcelImport implements ToCollection, WithChunkReading, WithStar
     private function lookupProduct(string $value, string $name = '', int $qtyPerBox = 0): Product
     {
         if (isset($this->productCache[$value])) return $this->productCache[$value];
-        $product = Product::withTrashed()->where('mm_number', $value)->where('is_active', true)->first();
+        $product = Product::withTrashed()->where('mm_number', $value)->first();
+        if (!$product) $product = Product::withTrashed()->where('code', 'MM-'.$value)->first();
+        if (!$product && $name !== '') $product = Product::withTrashed()->whereRaw('LOWER(name) = ?', [strtolower($name)])->first();
         if (!$product) {
-            $product = Product::withTrashed()->updateOrCreate(
-                ['mm_number' => $value],
-                ['code' => 'MM-'.$value, 'name' => $name !== '' ? $name : 'Imported '.$value, 'description' => $name !== '' ? $name : null, 'qty_per_box' => $qtyPerBox > 0 ? $qtyPerBox : 1, 'is_active' => true],
-            );
+            $product = new Product();
         }
+        $code = $product->code ?: 'MM-'.$value;
+        if (!$product->exists || $product->mm_number !== $value) {
+            $codeOwner = Product::withTrashed()->where('code', $code)->where($product->getKeyName(), '!=', $product->getKey())->exists();
+            if ($codeOwner) {
+                $suffix = 2;
+                do {
+                    $candidate = $code.'-'.$suffix++;
+                } while (Product::withTrashed()->where('code', $candidate)->exists());
+                $code = $candidate;
+            }
+        }
+        $safeName = $name !== '' ? $name : ($product->name ?: 'Imported '.$value);
+        if (str_starts_with(trim($safeName), '=')) $safeName = 'Imported '.$value;
+        $safeDescription = $name !== '' ? $name : $product->description;
+        if (str_starts_with(trim((string) $safeDescription), '=')) $safeDescription = null;
+        $product->fill(['code' => $code, 'name' => $safeName, 'mm_number' => $value, 'description' => $safeDescription, 'qty_per_box' => $qtyPerBox > 0 ? $qtyPerBox : ($product->qty_per_box ?: 1), 'is_active' => true]);
+        $product->save();
         if ($product->trashed()) $product->restore();
         return $this->productCache[$value] = $product;
     }
@@ -381,6 +435,18 @@ class DailyReportExcelImport implements ToCollection, WithChunkReading, WithStar
 
         $value = str_ireplace(['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'], ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], (string) $value);
         return Carbon::parse($value)->toDateString();
+    }
+
+    private function category(mixed $value): string
+    {
+        $value = strtoupper(trim((string) $value));
+        return in_array($value, ['CRITICAL', 'MAJOR', 'MINOR', 'UNACCEPTABLE', '-'], true) ? $value : '';
+    }
+
+    private function excelText(mixed $value): string
+    {
+        $value = trim(str_replace(["\xc2\xa0", "\xa0"], ' ', (string) $value));
+        return str_starts_with($value, '=') ? '' : $value;
     }
 
     private function number(mixed $value): ?string

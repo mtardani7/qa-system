@@ -20,7 +20,7 @@ export function RankedBarChart({ title, rows, emptyMessage, unit = "PCS", isLoad
     <section className="min-w-0 rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
       <div className="mb-5">
         <h2 className="text-base font-semibold text-slate-950 dark:text-white">{title}</h2>
-        <p className="mt-1 text-xs text-muted-foreground">Ranked by total output for the selected filters.</p>
+        <p className="mt-1 text-xs text-muted-foreground">{unit === "Defects" ? "Ranked by total defect quantity for the selected filters." : "Ranked by total output for the selected filters."}</p>
       </div>
 
       {isLoading ? (

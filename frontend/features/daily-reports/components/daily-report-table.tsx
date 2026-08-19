@@ -7,23 +7,30 @@ import {
   ChevronRight,
   ChevronUp,
   Copy,
+  ClipboardPaste,
   Edit2,
   Eye,
   FileDown,
   Lock,
   Printer,
+  RefreshCw,
   Search,
   Send,
   Trash2,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
   X,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   useBulkDailyReportWorkflow,
   useBulkDeleteDailyReports,
+  usePasteDailyReports,
   useDailyReportExport,
   useDailyReportLookups,
   useDailyReports,
@@ -32,8 +39,9 @@ import {
   useDuplicateDailyReport,
   useQueueDailyReportExport,
 } from "../hooks";
-import { dailyReportExportDownloadUrl, printDailyReport } from "../services";
+import { downloadDailyReportExport, printDailyReport } from "../services";
 import type { DailyReport, DailyReportStatus } from "../types";
+import type { DailyReportPayload } from "../services";
 
 type Props = { onEdit?: (report: DailyReport) => void };
 type ReportPeriod = "daily" | "weekly" | "monthly" | "yearly";
@@ -87,6 +95,8 @@ export function DailyReportTable({ onEdit }: Props) {
   const [direction, setDirection] = useState<"asc" | "desc">("desc");
   const [exportId, setExportId] = useState<number>();
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [copiedReports, setCopiedReports] = useState<DailyReport[]>([]);
+  const [tableZoom, setTableZoom] = useState(100);
   const [filters, setFilters] = useState<{
     period: ReportPeriod;
     plant_id?: number;
@@ -104,7 +114,7 @@ export function DailyReportTable({ onEdit }: Props) {
   const requestFilters = filters.production_date_from || filters.production_date_to
     ? filters
     : { ...filters, ...periodRange };
-  const { data, isLoading, isError } = useDailyReports({
+  const { data, isLoading, isError, isFetching, refetch } = useDailyReports({
     ...requestFilters,
     search,
     sort,
@@ -114,6 +124,7 @@ export function DailyReportTable({ onEdit }: Props) {
   });
   const deleteMutation = useDeleteDailyReport();
   const bulkDelete = useBulkDeleteDailyReports();
+  const pasteReports = usePasteDailyReports();
   const [deleteRequest, setDeleteRequest] = useState<DeleteRequest | null>(null);
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const workflow = useDailyReportWorkflow();
@@ -200,6 +211,45 @@ export function DailyReportTable({ onEdit }: Props) {
     const draftIds = selectedRows.filter((row) => row.status === "draft").map((row) => row.id);
     if (draftIds.length) setDeleteRequest({ ids: draftIds, label: `${draftIds.length} selected report(s)` });
   };
+  const copySelectedReports = async () => {
+    setCopiedReports(selectedRows);
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(JSON.stringify({ type: "qa-system-daily-reports", reports: selectedRows }));
+    }
+    toast.success(`${selectedRows.length} report(s) copied.`);
+  };
+  const pasteReportsForToday = async () => {
+    try {
+      let reports = copiedReports;
+      if (!reports.length && navigator.clipboard?.readText) {
+        const clipboard = JSON.parse(await navigator.clipboard.readText()) as { type?: string; reports?: DailyReport[] };
+        if (clipboard.type === "qa-system-daily-reports" && Array.isArray(clipboard.reports)) reports = clipboard.reports;
+      }
+      if (!reports.length) throw new Error("Copy report terlebih dahulu sebelum Paste.");
+      const productionDate = dateString(new Date());
+      const payloads: DailyReportPayload[] = reports.map((report) => ({
+        plant_id: report.plant.id,
+        machine_id: report.machine.id,
+        shift_id: report.shift.id,
+        product_id: report.product.id,
+        product_type: report.product_type,
+        checker_id: report.checker.id,
+        checker_2_id: report.checker_2?.id ?? undefined,
+        po_number: report.po_number,
+        output_box: report.output_box,
+        production_date: productionDate,
+        defects: report.defects.filter((defect) => defect.quantity !== null && defect.quantity > 0).map((defect) => ({ defect_id: defect.defect_id, quantity: defect.quantity as number, remarks: defect.remarks ?? undefined })),
+        remarks: report.remarks ?? undefined,
+        result: report.result ?? undefined,
+        finding_range_box: report.finding_range_box ?? undefined,
+      }));
+      await pasteReports.mutateAsync(payloads);
+      setSelectedIds([]);
+      toast.success(`${payloads.length} report(s) pasted for ${productionDate}.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to paste daily reports.");
+    }
+  };
   const confirmDelete = () => {
     if (!deleteRequest) return;
     const request = deleteRequest;
@@ -218,6 +268,15 @@ export function DailyReportTable({ onEdit }: Props) {
     queueExport.mutate(requestFilters, {
       onSuccess: (exportRecord) => setExportId(exportRecord.id),
     });
+  const downloadExport = async (id: number) => {
+    const blob = await downloadDailyReportExport(id);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `daily-reports-${id}.xlsx`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
   return (
     <section className="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <div className="flex flex-col gap-3 border-b border-slate-200 p-5 dark:border-slate-800">
@@ -228,15 +287,20 @@ export function DailyReportTable({ onEdit }: Props) {
               {data?.total ?? 0} records · server-side workflow history
             </p>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={exportReports}
-            disabled={queueExport.isPending}
-          >
-            <FileDown className="size-4" />{" "}
-            {queueExport.isPending ? "Queueing..." : "Export Excel"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" onClick={() => refetch()} disabled={isFetching} title="Refresh daily report table" aria-label="Refresh daily report table">
+              <RefreshCw className={`size-4 ${isFetching ? "animate-spin" : ""}`} /> Refresh
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={exportReports}
+              disabled={queueExport.isPending}
+            >
+              <FileDown className="size-4" />{" "}
+              {queueExport.isPending ? "Queueing..." : "Export Excel"}
+            </Button>
+          </div>
         </div>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
           <select className={selectClass} value={filters.period} onChange={(event) => setPeriod(event.target.value as ReportPeriod)} aria-label="Report period"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="yearly">Yearly</option></select>
@@ -320,12 +384,9 @@ export function DailyReportTable({ onEdit }: Props) {
       {exportStatus.data?.status === "completed" && (
         <div className="border-b bg-emerald-50 px-5 py-3 text-sm text-emerald-700">
           Export ready.{" "}
-          <a
-            className="font-medium underline"
-            href={dailyReportExportDownloadUrl(exportStatus.data.id)}
-          >
+          <button type="button" className="font-medium underline" onClick={() => { const id = exportStatus.data?.id; if (id) void downloadExport(id); }}>
             Download Excel
-          </a>
+          </button>
         </div>
       )}
       {exportStatus.data?.status === "failed" && (
@@ -336,6 +397,8 @@ export function DailyReportTable({ onEdit }: Props) {
       {selectedRows.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-50 px-5 py-3 dark:border-slate-800 dark:bg-slate-950/40">
           <span className="mr-2 text-sm font-medium">{selectedRows.length} selected</span>
+          <Button type="button" size="sm" variant="outline" onClick={() => void copySelectedReports()}><Copy className="size-4" /> Copy</Button>
+          <Button type="button" size="sm" variant="outline" onClick={() => void pasteReportsForToday()} disabled={pasteReports.isPending}><ClipboardPaste className="size-4" /> {pasteReports.isPending ? "Pasting..." : "Paste today"}</Button>
           <Button type="button" size="sm" variant="outline" onClick={() => runBulkWorkflow("submit")} disabled={bulkWorkflow.isPending || !selectedRows.some((row) => row.status === "draft")}><Send className="size-4" /> Submit</Button>
           <Button type="button" size="sm" variant="outline" onClick={() => runBulkWorkflow("review")} disabled={bulkWorkflow.isPending || !selectedRows.some((row) => row.status === "submitted")}><Check className="size-4" /> Review</Button>
           <Button type="button" size="sm" variant="outline" onClick={() => runBulkWorkflow("lock")} disabled={bulkWorkflow.isPending || !selectedRows.some((row) => row.status === "reviewed")}><Lock className="size-4" /> Lock</Button>
@@ -361,9 +424,14 @@ export function DailyReportTable({ onEdit }: Props) {
             <div className="flex items-center gap-1">
               <Button type="button" variant="outline" size="icon-sm" onClick={() => scrollTable("left")} aria-label="Scroll table left" title="Scroll table left"><ChevronLeft className="size-4" /></Button>
               <Button type="button" variant="outline" size="icon-sm" onClick={() => scrollTable("right")} aria-label="Scroll table right" title="Scroll table right"><ChevronRight className="size-4" /></Button>
+              <span className="ml-2 min-w-12 text-center text-xs text-muted-foreground" aria-live="polite">{tableZoom}%</span>
+              <Button type="button" variant="outline" size="icon-sm" onClick={() => setTableZoom((value) => Math.max(70, value - 10))} disabled={tableZoom <= 70} aria-label="Zoom out table" title="Zoom out table"><ZoomOut className="size-4" /></Button>
+              <Button type="button" variant="outline" size="icon-sm" onClick={() => setTableZoom((value) => Math.min(100, value + 10))} disabled={tableZoom >= 100} aria-label="Zoom in table" title="Zoom in table"><ZoomIn className="size-4" /></Button>
+              <Button type="button" variant="outline" size="icon-sm" onClick={() => setTableZoom(100)} disabled={tableZoom === 100} aria-label="Reset table zoom" title="Reset table zoom"><RotateCcw className="size-4" /></Button>
             </div>
           </div>
-          <div ref={tableScrollRef} className="overflow-x-auto" onWheel={(event) => { if (event.deltaY !== 0 && event.deltaX === 0) { event.currentTarget.scrollLeft += event.deltaY; event.preventDefault(); } }}>
+          <div ref={tableScrollRef} className="overflow-x-auto" onWheel={(event) => { if (event.deltaY !== 0 && event.deltaX === 0) event.currentTarget.scrollLeft += event.deltaY; }}>
+            <div style={{ zoom: `${tableZoom}%` }}>
             <table className="w-full min-w-[1900px] text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-muted-foreground dark:bg-slate-950/40">
                 <tr>
@@ -414,7 +482,7 @@ export function DailyReportTable({ onEdit }: Props) {
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {rows.map((report) => (
-                  <tr key={report.id}>
+                  <tr key={report.id} className={report.output_box === 0 ? "bg-red-50 dark:bg-red-950/30" : undefined}>
                     <td className="px-4 py-4"><input type="checkbox" aria-label={`Select report ${report.po_number}`} checked={selectedIds.includes(report.id)} onChange={() => toggleSelected(report.id)} /></td>
                     <td className="px-4 py-4 text-muted-foreground">
                       {report.production_date}
@@ -570,6 +638,7 @@ export function DailyReportTable({ onEdit }: Props) {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
           <div className="flex items-center justify-between border-t border-slate-200 px-5 py-3 dark:border-slate-800">
             <p className="text-xs text-muted-foreground">

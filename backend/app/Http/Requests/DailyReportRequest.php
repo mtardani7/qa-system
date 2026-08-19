@@ -31,7 +31,7 @@ class DailyReportRequest extends FormRequest
             'defect_id' => [$legacyPayload ? 'required' : 'nullable', 'integer', Rule::exists('defects', 'id')->where('is_active', true)],
             'quantity_defect' => [$legacyPayload ? 'required' : 'nullable', 'integer', 'gt:0', 'max:1000000'],
             'po_number' => ['required', 'string', 'max:100'],
-            'output_box' => ['required', 'integer', 'gt:0', 'max:1000000'],
+            'output_box' => ['required', 'integer', 'gte:0', 'max:1000000'],
             'production_date' => ['required', 'date_format:Y-m-d'],
             'remarks' => ['nullable', 'string', 'max:2000'],
             'result' => ['nullable', Rule::in(['OK', 'OK, WITH NOTED', 'SORTIR', 'REJECT'])],
