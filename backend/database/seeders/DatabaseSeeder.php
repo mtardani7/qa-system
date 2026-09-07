@@ -36,11 +36,11 @@ class DatabaseSeeder extends Seeder
         $superAdmin = Role::firstOrCreate(['name' => 'Super Admin', 'guard_name' => 'web']);
         $superAdmin->syncPermissions($permissions);
         $qaStaff = Role::firstOrCreate(['name' => 'QA Staff', 'guard_name' => 'web']);
-        $qaStaff->syncPermissions(['dashboard.view', 'daily-reports.view', 'daily-reports.create', 'daily-reports.update', 'daily-reports.delete', 'daily-reports.submit', 'daily-reports.export', 'daily-reports.import']);
+        $qaStaff->syncPermissions(['dashboard.view', 'daily-reports.view', 'daily-reports.create', 'daily-reports.update', 'daily-reports.delete', 'daily-reports.export', 'daily-reports.import']);
         $qaSupervisor = Role::firstOrCreate(['name' => 'QA Supervisor', 'guard_name' => 'web']);
-        $qaSupervisor->syncPermissions(['dashboard.view', 'daily-reports.view', 'daily-reports.review', 'daily-reports.approve', 'daily-reports.reject', 'daily-reports.lock', 'daily-reports.export']);
+        $qaSupervisor->syncPermissions(['dashboard.view', 'daily-reports.view', 'daily-reports.lock', 'daily-reports.export']);
         $qaManager = Role::firstOrCreate(['name' => 'QA Manager', 'guard_name' => 'web']);
-        $qaManager->syncPermissions(['dashboard.view', 'daily-reports.view', 'daily-reports.review', 'daily-reports.approve', 'daily-reports.reject', 'daily-reports.lock', 'daily-reports.export', 'audit.view']);
+        $qaManager->syncPermissions(['dashboard.view', 'daily-reports.view', 'daily-reports.lock', 'daily-reports.export', 'audit.view']);
         $management = Role::firstOrCreate(['name' => 'Management', 'guard_name' => 'web']);
         $management->syncPermissions(array_values(array_filter($permissions, fn (string $permission): bool => !str_starts_with($permission, 'users.'))));
         $production = Role::firstOrCreate(['name' => 'Production', 'guard_name' => 'web']);

@@ -20,18 +20,24 @@
     </style>
 </head>
 <body>
+    @php($snapshot = $report->master_snapshot ?? [])
+    @php($plant = $snapshot['plant'] ?? $report->plant)
+    @php($machine = $snapshot['machine'] ?? $report->machine)
+    @php($shift = $snapshot['shift'] ?? $report->shift)
+    @php($checker = $snapshot['checker'] ?? $report->checker)
+    @php($defects = array_key_exists('defects', $snapshot) ? collect($snapshot['defects']) : $report->defects)
     <div class="header"><div class="logo"><img src="{{ asset('logo.svg') }}" alt="QA Management System"></div><h1>DAILY QA REPORT</h1></div>
     <div class="meta">
         <div class="field"><span class="label">Production Date</span>{{ $report->production_date?->format('Y-m-d') }}</div>
-        <div class="field"><span class="label">Plant / Line</span>{{ $report->plant?->name }} / {{ $report->line?->name }}</div>
-        <div class="field"><span class="label">Machine / Shift</span>{{ $report->machine?->name }} / {{ $report->shift?->name }}</div>
+        <div class="field"><span class="label">Plant / Line</span>{{ data_get($plant, 'name') }} / {{ $report->line?->name }}</div>
+        <div class="field"><span class="label">Machine / Shift</span>{{ data_get($machine, 'name') }} / {{ data_get($shift, 'name') }}</div>
         <div class="field"><span class="label">Status</span>{{ $report->status?->value }}</div>
         <div class="field"><span class="label">Product MM Number</span>{{ $report->mm_number }}</div>
         <div class="field"><span class="label">PO Number</span>{{ $report->po_number }}</div>
         <div class="field"><span class="label">Output</span>{{ number_format($report->output_box) }} boxes / {{ number_format($report->output_pcs) }} PCS</div>
-        <div class="field"><span class="label">QA Checker</span>{{ $report->checker?->name }}</div>
+        <div class="field"><span class="label">QA Checker</span>{{ data_get($checker, 'name') }}</div>
     </div>
-    <table><thead><tr><th>Defect</th><th>Category</th><th>Quantity</th><th>Remarks</th></tr></thead><tbody>@foreach($report->defects as $item)<tr><td>{{ $item->defect?->name }}</td><td>{{ $item->defect?->category }}</td><td>{{ number_format($item->quantity) }}</td><td>{{ $item->remarks }}</td></tr>@endforeach</tbody></table>
+    <table><thead><tr><th>Defect</th><th>Category</th><th>Quantity</th><th>Remarks</th></tr></thead><tbody>@foreach($defects as $item)<tr><td>{{ data_get($item, 'defect.name') }}</td><td>{{ data_get($item, 'defect.category') }}</td><td>{{ number_format(data_get($item, 'quantity')) }}</td><td>{{ data_get($item, 'remarks') }}</td></tr>@endforeach</tbody></table>
     <p><strong>Remarks:</strong> {{ $report->remarks }}</p>
     <div class="signatures"><div class="signature">QA Checker</div><div class="signature">QA Supervisor</div><div class="signature">Management</div></div>
 </body>

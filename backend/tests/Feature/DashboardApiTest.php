@@ -32,7 +32,7 @@ class DashboardApiTest extends TestCase
 
         $response = $this->actingAs($user)->getJson('/api/v1/dashboard?date=2026-08-07&plant_id='.$plant->id.'&shift_id='.$shift->id.'&machine_id='.$machine->id);
 
-        $response->assertOk()->assertJsonPath('success', true)->assertJsonPath('data.summary.production_pcs', 100)->assertJsonPath('data.summary.defect_qty', 5)->assertJsonPath('data.summary.defect_rate', 5)->assertJsonPath('data.summary.yield', 95)->assertJsonPath('data.top_defects.0.quantity', 5)->assertJsonPath('data.pareto.0.cumulative_percentage', 100);
+        $response->assertOk()->assertJsonPath('success', true)->assertJsonPath('data.summary.production_pcs', 100)->assertJsonPath('data.summary.defect_qty', 5)->assertJsonPath('data.summary.defect_rate', 5)->assertJsonPath('data.summary.yield', 95)->assertJsonPath('data.monthly.defects', 5)->assertJsonPath('data.top_defects.0.quantity', 5)->assertJsonPath('data.pareto.0.cumulative_percentage', 100);
     }
 
     public function test_dashboard_requires_permission(): void

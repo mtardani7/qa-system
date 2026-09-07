@@ -36,7 +36,7 @@ export function trendOption(rows: DashboardTrend[], metric: "production_pcs" | "
   return {
     tooltip: {
       trigger: "axis",
-      valueFormatter: (value) => isPercentage ? `${Number(value).toFixed(2)}%` : `${wholeNumber.format(Number(value))}${metric === "production_pcs" ? " PCS" : ""}`,
+      valueFormatter: (value) => isPercentage ? `${Number(value).toFixed(3)}%` : `${wholeNumber.format(Number(value))}${metric === "production_pcs" ? " PCS" : ""}`,
     },
     grid: { left: 56, right: 20, top: 24, bottom: 40, containLabel: true },
     xAxis: { type: "category", data: rows.map((row) => row.date), ...axis, axisLabel: { color: "#64748b", hideOverlap: true } },

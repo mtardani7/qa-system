@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { UserPlus } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, Search, UserPlus } from "lucide-react";
 import { apiClient } from "@/services/api-client";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -61,22 +61,29 @@ export function UsersManagementPage({
     const [plants, setPlants] = useState<Plant[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(20);
+    const [pagination, setPagination] = useState({ current_page: 1, last_page: 1 });
     const [editing, setEditing] = useState<Account | null>(null);
     const [createOpen, setCreateOpen] = useState(false);
     const [form, setForm] = useState<AccountForm>(initialForm);
     const [error, setError] = useState("");
     const [isSaving, setIsSaving] = useState(false);
+    const skipInitialSearch = useRef(true);
 
     const title = useMemo(() => (editing ? "Edit User" : "Create User"), [editing]);
 
-    const loadUsers = async (keyword = search) => {
+    const loadUsers = async (keyword = search, requestedPage = page, requestedPageSize = pageSize) => {
         const response = await apiClient.get("/users", {
             params: {
                 search: keyword || undefined,
-                per_page: 100,
+                page: requestedPage,
+                per_page: requestedPageSize,
             },
         });
-        setUsers(response.data.data.data ?? response.data.data);
+        const payload = response.data.data;
+        setUsers(payload.data ?? payload);
+        setPagination({ current_page: payload.current_page ?? requestedPage, last_page: payload.last_page ?? 1 });
     };
 
     useEffect(() => {
@@ -86,10 +93,12 @@ export function UsersManagementPage({
             setLoading(true);
             try {
                 const [accountResponse, plantResponse] = await Promise.all([
-                    apiClient.get("/users", { params: { per_page: 100 } }),
+                    apiClient.get("/users", { params: { page: 1, per_page: pageSize } }),
                     apiClient.get("/plants", { params: { per_page: 100, is_active: true } }),
                 ]);
-                setUsers(accountResponse.data.data.data ?? accountResponse.data.data);
+                const accountPayload = accountResponse.data.data;
+                setUsers(accountPayload.data ?? accountPayload);
+                setPagination({ current_page: accountPayload.current_page ?? 1, last_page: accountPayload.last_page ?? 1 });
                 setPlants(plantResponse.data.data.data ?? plantResponse.data.data);
             } finally {
                 setLoading(false);
@@ -98,6 +107,19 @@ export function UsersManagementPage({
 
         void refresh();
     }, [canView]);
+
+    useEffect(() => {
+        if (!canView) return;
+        if (skipInitialSearch.current) {
+            skipInitialSearch.current = false;
+            return;
+        }
+        const timeout = window.setTimeout(() => {
+            setPage(1);
+            void loadUsers(search, 1, pageSize);
+        }, 300);
+        return () => window.clearTimeout(timeout);
+    }, [canView, search, pageSize]);
 
     if (!canView) {
         return <main className="p-8 text-sm text-muted-foreground">You are not authorized to manage users.</main>;
@@ -234,19 +256,24 @@ export function UsersManagementPage({
                     )}
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                    <input
-                        className="h-10 w-72 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-900"
-                        placeholder="Search name, employee number, username/email"
-                        value={search}
-                        onChange={(event) => setSearch(event.target.value)}
-                    />
-                    <Button variant="outline" onClick={() => loadUsers(search)}>Search</Button>
-                </div>
-
-                <section className="overflow-x-auto rounded-xl border bg-white dark:border-slate-800 dark:bg-slate-900">
+                <section className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                    <div className="flex flex-col gap-3 border-b border-slate-200 p-5 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <h2 className="text-base font-semibold">Users registry</h2>
+                            <p className="mt-1 text-sm text-muted-foreground">Manage accounts and plant access.</p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            <label className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm dark:border-slate-700">
+                                <Search className="size-4 text-muted-foreground" />
+                                <input className="w-64 bg-transparent outline-none" placeholder="Search users..." value={search} onChange={(event) => setSearch(event.target.value)} />
+                            </label>
+                            <select className="h-10 rounded-lg border border-slate-200 bg-transparent px-3 text-sm dark:border-slate-700" value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }} aria-label="Rows per page">
+                                {[20, 50, 100].map((size) => <option key={size} value={size}>{size} / page</option>)}
+                            </select>
+                        </div>
+                    </div>
                     <table className="w-full min-w-[1100px] text-left text-sm">
-                        <thead className="border-b bg-slate-50 dark:border-slate-800 dark:bg-slate-950">
+                        <thead className="border-b bg-slate-50 text-xs uppercase tracking-wide text-muted-foreground dark:border-slate-800 dark:bg-slate-950/40">
                             <tr>
                                 {[
                                     "Name",
@@ -261,7 +288,7 @@ export function UsersManagementPage({
                                 ))}
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                             {loading ? (
                                 <tr>
                                     <td className="px-4 py-4" colSpan={7}><div className="space-y-3" aria-label="Loading users"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div></td>
@@ -271,8 +298,8 @@ export function UsersManagementPage({
                                     <td className="px-4 py-6 text-muted-foreground" colSpan={7}>No users found.</td>
                                 </tr>
                             ) : users.map((account) => (
-                                <tr key={account.id} className="border-b last:border-0 dark:border-slate-800">
-                                    <td className="px-4 py-3 font-medium">{account.name}</td>
+                                <tr key={account.id} className="text-slate-700 transition-colors hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800/50">
+                                    <td className="px-4 py-3 font-medium text-slate-950 dark:text-white">{account.name}</td>
                                     <td className="px-4 py-3">{account.employee_number || "-"}</td>
                                     <td className="px-4 py-3">{account.email}</td>
                                     <td className="px-4 py-3">{account.roles.join(", ")}</td>
@@ -289,6 +316,13 @@ export function UsersManagementPage({
                             ))}
                         </tbody>
                     </table>
+                    <div className="flex items-center justify-between border-t border-slate-200 px-5 py-3 dark:border-slate-800">
+                        <p className="text-xs text-muted-foreground">Page {pagination.current_page} of {pagination.last_page}</p>
+                        <div className="flex gap-2">
+                            <Button variant="outline" size="sm" disabled={pagination.current_page <= 1 || loading} onClick={() => { const nextPage = page - 1; setPage(nextPage); void loadUsers(search, nextPage, pageSize); }}><ChevronLeft className="size-4" /> Previous</Button>
+                            <Button variant="outline" size="sm" disabled={pagination.current_page >= pagination.last_page || loading} onClick={() => { const nextPage = page + 1; setPage(nextPage); void loadUsers(search, nextPage, pageSize); }}>Next <ChevronRight className="size-4" /></Button>
+                        </div>
+                    </div>
                 </section>
 
                 {(canCreate && createOpen || (canUpdate && editing)) && (

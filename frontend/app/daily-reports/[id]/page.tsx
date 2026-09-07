@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Check, ClipboardCheck, Copy, Edit2, Lock, Printer, Send, X } from "lucide-react";
+import { ArrowLeft, ClipboardCheck, Copy, Edit2, Lock, Printer } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { PageSkeleton } from "@/components/layouts/page-skeleton";
@@ -88,9 +88,7 @@ export default function DailyReportDetailPage() {
           </div>
 
           <div className="mt-6 flex flex-wrap gap-2">
-            {report.status === "draft" && <Button onClick={() => workflow.mutate({ id, action: "submit" })}><Send className="size-4" /> Submit</Button>}
-            {report.status === "submitted" && <><Button onClick={() => workflow.mutate({ id, action: "review" })}><Check className="size-4" /> Review</Button><Button variant="outline" onClick={() => workflow.mutate({ id, action: "reject" })}><X className="size-4" /> Reject</Button></>}
-            {report.status === "reviewed" && <><Button onClick={() => workflow.mutate({ id, action: "approve" })}><Check className="size-4" /> Approve</Button><Button variant="outline" onClick={() => workflow.mutate({ id, action: "lock" })}><Lock className="size-4" /> Lock</Button></>}
+            {report.status === "draft" && <Button onClick={() => workflow.mutate({ id, action: "lock" })}><Lock className="size-4" /> Lock</Button>}
           </div>
         </section>
       </div>

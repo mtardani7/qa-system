@@ -46,6 +46,11 @@ class DailyReportExcelImport implements ToCollection, WithChunkReading, WithStar
             $line = ++$this->rowNumber;
             $values = array_values($row->toArray());
             if (!$this->headerRead) {
+                if ($this->isModernHeader($values)) {
+                    $this->modernFormat = true;
+                    $this->headerRead = true;
+                    continue;
+                }
                 $this->modernFormat = $this->isModernHeader($values);
                 if ($this->isModernHeaderWithoutDate($values)) {
                     $this->modernFormat = true;
@@ -218,7 +223,7 @@ class DailyReportExcelImport implements ToCollection, WithChunkReading, WithStar
             'product_type' => trim((string) ($row[3] ?? 'FG')) ?: 'FG',
             'category' => $defectCategory ?: null,
             'po_number' => $this->number($row[6] ?? null) ?? ('IMPORT-'.$line),
-            'output_box' => (int) ($row[7] ?? 0),
+            'output_box' => (int) ($row[9] ?? 0),
             'checker' => $this->lookupChecker($row[18] ?? null),
             'checker_2' => trim((string) ($row[19] ?? '')) !== '' ? $this->lookupChecker($row[19]) : null,
             'finding_range_box' => implode(' ', array_filter(array_map(fn ($value) => trim((string) $value), array_slice($row, 10, 3)))),

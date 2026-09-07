@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -15,12 +14,10 @@ import {
   Printer,
   RefreshCw,
   Search,
-  Send,
   Trash2,
   ZoomIn,
   ZoomOut,
   RotateCcw,
-  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -28,7 +25,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  useBulkDailyReportWorkflow,
+  useBulkLockDailyReports,
   useBulkDeleteDailyReports,
   usePasteDailyReports,
   useDailyReportExport,
@@ -48,18 +45,16 @@ type ReportPeriod = "daily" | "weekly" | "monthly" | "yearly";
 type DeleteRequest = { ids: number[]; label: string };
 type SortField =
   | "production_date"
+  | "machine_id"
   | "po_number"
   | "output_box"
   | "output_pcs"
   | "quantity_defect";
 const selectClass =
-  "h-10 rounded-lg border border-slate-200 bg-transparent px-3 text-sm dark:border-slate-700";
+  "h-10 rounded-lg border border-slate-200 bg-transparent px-3 text-sm text-slate-900 [color-scheme:light] dark:border-slate-700 dark:text-slate-100 dark:[color-scheme:dark]";
 const statusLabel: Record<DailyReportStatus, string> = {
   draft: "Draft",
-  submitted: "Submitted",
-  reviewed: "Reviewed",
   locked: "Locked",
-  cancelled: "Cancelled",
 };
 
 const dateString = (date: Date) => {
@@ -68,6 +63,8 @@ const dateString = (date: Date) => {
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 };
+
+const monthString = (date: Date) => dateString(date).slice(0, 7);
 
 const periodDates = (period: ReportPeriod, referenceDate: Date) => {
   const from = new Date(referenceDate);
@@ -96,7 +93,16 @@ export function DailyReportTable({ onEdit }: Props) {
   const [exportId, setExportId] = useState<number>();
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [copiedReports, setCopiedReports] = useState<DailyReport[]>([]);
+  const [pasteShiftId, setPasteShiftId] = useState<number>();
+  const [pasteCheckerId, setPasteCheckerId] = useState<number>();
+  const [pasteChecker2Id, setPasteChecker2Id] = useState<number>();
   const [tableZoom, setTableZoom] = useState(100);
+  const [monthlyLockOpen, setMonthlyLockOpen] = useState(false);
+  const [lockMonth, setLockMonth] = useState(() => {
+    const date = new Date();
+    date.setMonth(date.getMonth() - 1);
+    return monthString(date);
+  });
   const [filters, setFilters] = useState<{
     period: ReportPeriod;
     plant_id?: number;
@@ -108,6 +114,7 @@ export function DailyReportTable({ onEdit }: Props) {
     production_date_to?: string;
     result?: string;
     status?: DailyReportStatus;
+    output_box_zero?: boolean;
   }>({ period: "monthly" });
   const { data: lookups } = useDailyReportLookups();
   const periodRange = periodDates(filters.period, new Date());
@@ -128,7 +135,7 @@ export function DailyReportTable({ onEdit }: Props) {
   const [deleteRequest, setDeleteRequest] = useState<DeleteRequest | null>(null);
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const workflow = useDailyReportWorkflow();
-  const bulkWorkflow = useBulkDailyReportWorkflow();
+  const bulkLock = useBulkLockDailyReports();
   const duplicate = useDuplicateDailyReport();
   const queueExport = useQueueDailyReportExport();
   const exportStatus = useDailyReportExport(exportId);
@@ -153,7 +160,7 @@ export function DailyReportTable({ onEdit }: Props) {
     setSelectedIds([]);
     setFilters((current) => ({
       ...current,
-      [name]: value ? ["status", "result", "product_type"].includes(name) ? value : Number(value) : undefined,
+      [name]: value ? name === "output_box_zero" ? value === "1" : ["status", "result", "product_type"].includes(name) ? value : Number(value) : undefined,
     }));
     setPage(1);
   };
@@ -176,9 +183,10 @@ export function DailyReportTable({ onEdit }: Props) {
   const machines =
     lookups?.machines.filter(
       (machine) => !filters.plant_id || machine.plant_id === filters.plant_id,
-    ) ?? [];
+    ).reverse() ?? [];
   const rows = data?.data ?? [];
   const selectedRows = rows.filter((row) => selectedIds.includes(row.id));
+  const pasteCheckers = lookups?.qa_checkers.filter((checker) => !selectedRows[0] || checker.plant_id === selectedRows[0].plant.id) ?? [];
   const toggleSelected = (id: number) =>
     setSelectedIds((current) =>
       current.includes(id)
@@ -193,26 +201,42 @@ export function DailyReportTable({ onEdit }: Props) {
         ? current.filter((id) => !pageIds.includes(id))
         : [...new Set([...current, ...pageIds])];
     });
-  const runBulkWorkflow = (action: "submit" | "review" | "lock") => {
-    const eligibleStatus = { submit: "draft", review: "submitted", lock: "reviewed" }[action];
-    const eligibleIds = selectedRows.filter((row) => row.status === eligibleStatus).map((row) => row.id);
-    if (
-      eligibleIds.length &&
-      window.confirm(
-        `Apply ${action} to ${eligibleIds.length} selected report(s)?`,
-      )
-    )
-      bulkWorkflow.mutate(
-        { ids: eligibleIds, action },
-        { onSuccess: () => setSelectedIds([]) },
-      );
+  const runMonthlyLock = () => {
+    if (!lockMonth) return;
+    setMonthlyLockOpen(true);
   };
+  const confirmMonthlyLock = () => {
+    setMonthlyLockOpen(false);
+    bulkLock.mutate(
+      { month: lockMonth, plantId: filters.plant_id },
+      {
+        onSuccess: (result) => {
+          setSelectedIds([]);
+          toast.success(`${result.locked} report(s) locked for ${result.month}.`);
+        },
+        onError: (error) => {
+          const responseError = error as Error & { response?: { data?: { message?: string; errors?: Record<string, string[]> } } };
+          const message = Object.values(responseError.response?.data?.errors ?? {})[0]?.[0] ?? responseError.response?.data?.message ?? "Unable to lock monthly reports.";
+          toast.error(message);
+        },
+      },
+    );
+  };
+  const currentDate = new Date();
+  const previousMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
+  const currentMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+  const isCurrentMonthEnd = currentDate.getDate() === new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+  const minimumLockMonth = monthString(previousMonth);
+  const maximumLockMonth = isCurrentMonthEnd ? monthString(currentMonth) : minimumLockMonth;
   const runBulkDelete = () => {
     const draftIds = selectedRows.filter((row) => row.status === "draft").map((row) => row.id);
     if (draftIds.length) setDeleteRequest({ ids: draftIds, label: `${draftIds.length} selected report(s)` });
   };
   const copySelectedReports = async () => {
     setCopiedReports(selectedRows);
+    setPasteShiftId(selectedRows[0]?.shift.id);
+    setPasteCheckerId(undefined);
+    setPasteChecker2Id(undefined);
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(JSON.stringify({ type: "qa-system-daily-reports", reports: selectedRows }));
     }
@@ -230,11 +254,11 @@ export function DailyReportTable({ onEdit }: Props) {
       const payloads: DailyReportPayload[] = reports.map((report) => ({
         plant_id: report.plant.id,
         machine_id: report.machine.id,
-        shift_id: report.shift.id,
+        shift_id: pasteShiftId ?? report.shift.id,
         product_id: report.product.id,
         product_type: report.product_type,
-        checker_id: report.checker.id,
-        checker_2_id: report.checker_2?.id ?? undefined,
+        checker_id: pasteCheckerId ?? report.checker.id,
+        checker_2_id: pasteChecker2Id ?? report.checker_2?.id ?? undefined,
         po_number: report.po_number,
         output_box: report.output_box,
         production_date: productionDate,
@@ -299,6 +323,10 @@ export function DailyReportTable({ onEdit }: Props) {
             >
               <FileDown className="size-4" />{" "}
               {queueExport.isPending ? "Queueing..." : "Export Excel"}
+            </Button>
+            <input type="month" className={selectClass} value={lockMonth} min={minimumLockMonth} max={maximumLockMonth} onChange={(event) => setLockMonth(event.target.value)} aria-label="Month to lock" title="Month to lock" />
+            <Button type="button" variant="outline" onClick={runMonthlyLock} disabled={bulkLock.isPending || !lockMonth} title="Lock all draft reports in the selected month">
+              <Lock className="size-4" /> {bulkLock.isPending ? "Locking..." : "Lock month"}
             </Button>
           </div>
         </div>
@@ -379,6 +407,10 @@ export function DailyReportTable({ onEdit }: Props) {
               </option>
             ))}
           </select>
+          <select className={selectClass} value={filters.output_box_zero === true ? "1" : ""} onChange={(event) => setFilter("output_box_zero", event.target.value)} aria-label="Output Box filter">
+            <option value="">All output boxes</option>
+            <option value="1">Output Box = 0</option>
+          </select>
         </div>
       </div>
       {exportStatus.data?.status === "completed" && (
@@ -398,10 +430,19 @@ export function DailyReportTable({ onEdit }: Props) {
         <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-50 px-5 py-3 dark:border-slate-800 dark:bg-slate-950/40">
           <span className="mr-2 text-sm font-medium">{selectedRows.length} selected</span>
           <Button type="button" size="sm" variant="outline" onClick={() => void copySelectedReports()}><Copy className="size-4" /> Copy</Button>
+          <select className="h-9 rounded-md border border-slate-200 bg-transparent px-2 text-sm dark:border-slate-700" value={pasteShiftId ?? ""} onChange={(event) => setPasteShiftId(event.target.value ? Number(event.target.value) : undefined)} aria-label="Shift for pasted reports" title="Shift for pasted reports">
+            <option value="">Original shift</option>
+            {lookups?.shifts.map((shift) => <option key={shift.id} value={shift.id}>{shift.name}</option>)}
+          </select>
+          <select className="h-9 rounded-md border border-slate-200 bg-transparent px-2 text-sm dark:border-slate-700" value={pasteCheckerId ?? ""} onChange={(event) => setPasteCheckerId(event.target.value ? Number(event.target.value) : undefined)} aria-label="QA Checked 1 for pasted reports" title="QA Checked 1 for pasted reports">
+            <option value="">Original QA 1</option>
+            {pasteCheckers.map((checker) => <option key={checker.id} value={checker.id}>{checker.name}</option>)}
+          </select>
+          <select className="h-9 rounded-md border border-slate-200 bg-transparent px-2 text-sm dark:border-slate-700" value={pasteChecker2Id ?? ""} onChange={(event) => setPasteChecker2Id(event.target.value ? Number(event.target.value) : undefined)} aria-label="QA Checked 2 for pasted reports" title="QA Checked 2 for pasted reports">
+            <option value="">Original QA 2</option>
+            {pasteCheckers.filter((checker) => checker.id !== pasteCheckerId).map((checker) => <option key={checker.id} value={checker.id}>{checker.name}</option>)}
+          </select>
           <Button type="button" size="sm" variant="outline" onClick={() => void pasteReportsForToday()} disabled={pasteReports.isPending}><ClipboardPaste className="size-4" /> {pasteReports.isPending ? "Pasting..." : "Paste today"}</Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => runBulkWorkflow("submit")} disabled={bulkWorkflow.isPending || !selectedRows.some((row) => row.status === "draft")}><Send className="size-4" /> Submit</Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => runBulkWorkflow("review")} disabled={bulkWorkflow.isPending || !selectedRows.some((row) => row.status === "submitted")}><Check className="size-4" /> Review</Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => runBulkWorkflow("lock")} disabled={bulkWorkflow.isPending || !selectedRows.some((row) => row.status === "reviewed")}><Lock className="size-4" /> Lock</Button>
           <Button type="button" size="sm" variant="outline" className="text-rose-600" onClick={runBulkDelete} disabled={bulkDelete.isPending || !selectedRows.some((row) => row.status === "draft")}><Trash2 className="size-4" /> Delete</Button>
         </div>
       )}
@@ -446,7 +487,15 @@ export function DailyReportTable({ onEdit }: Props) {
                     </button>
                   </th>
                   <th className="px-4 py-3">Shift</th>
-                  <th className="px-4 py-3">Machine</th>
+                  <th className="px-4 py-3">
+                    <button
+                      type="button"
+                      className="flex items-center gap-1"
+                      onClick={() => sortBy("machine_id")}
+                    >
+                      Machine {icon("machine_id")}
+                    </button>
+                  </th>
                   <th className="px-4 py-3">Product Type</th>
                   <th className="px-4 py-3">MM Number</th>
                   <th className="px-4 py-3">Item Name</th>
@@ -549,76 +598,11 @@ export function DailyReportTable({ onEdit }: Props) {
                           <Button
                             variant="ghost"
                             size="icon-sm"
-                            onClick={() =>
-                              workflow.mutate({
-                                id: report.id,
-                                action: "submit",
-                              })
-                            }
-                            aria-label="Submit report"
+                            onClick={() => workflow.mutate({ id: report.id, action: "lock" })}
+                            aria-label="Lock report"
                           >
-                            <Send className="size-4" />
+                            <Lock className="size-4" />
                           </Button>
-                        )}
-                        {report.status === "submitted" && (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              onClick={() =>
-                                workflow.mutate({
-                                  id: report.id,
-                                  action: "review",
-                                })
-                              }
-                              aria-label="Review report"
-                            >
-                              <Check className="size-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              onClick={() =>
-                                workflow.mutate({
-                                  id: report.id,
-                                  action: "reject",
-                                })
-                              }
-                              aria-label="Reject report"
-                            >
-                              <X className="size-4" />
-                            </Button>
-                          </>
-                        )}
-                        {report.status === "reviewed" && (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              onClick={() =>
-                                workflow.mutate({
-                                  id: report.id,
-                                  action: "approve",
-                                })
-                              }
-                              aria-label="Approve report"
-                            >
-                              <Check className="size-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              onClick={() =>
-                                workflow.mutate({
-                                  id: report.id,
-                                  action: "lock",
-                                })
-                              }
-                              aria-label="Lock report"
-                            >
-                              <Lock className="size-4" />
-                            </Button>
-                          </>
                         )}
                         {report.status === "draft" && (
                           <Button
@@ -676,6 +660,18 @@ export function DailyReportTable({ onEdit }: Props) {
             <div className="mt-6 flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setDeleteRequest(null)} disabled={deleteMutation.isPending || bulkDelete.isPending}>Cancel</Button>
               <Button type="button" className="bg-rose-600 text-white hover:bg-rose-700" onClick={confirmDelete} disabled={deleteMutation.isPending || bulkDelete.isPending}><Trash2 className="size-4" /> Delete</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {monthlyLockOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true" aria-labelledby="lock-monthly-reports-title">
+          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900">
+            <h2 id="lock-monthly-reports-title" className="text-lg font-semibold">Lock monthly reports?</h2>
+            <p className="mt-2 text-sm text-muted-foreground">Lock all draft reports for {lockMonth}? Locked reports cannot be edited and will keep their current master data.</p>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setMonthlyLockOpen(false)} disabled={bulkLock.isPending}>Cancel</Button>
+              <Button type="button" onClick={confirmMonthlyLock} disabled={bulkLock.isPending}><Lock className="size-4" /> {bulkLock.isPending ? "Locking..." : "Lock month"}</Button>
             </div>
           </div>
         </div>

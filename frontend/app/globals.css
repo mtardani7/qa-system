@@ -121,6 +121,21 @@
   * {
     @apply border-border outline-ring/50;
   }
+
+  select,
+  select option {
+    color: #0f172a;
+    background-color: #ffffff;
+    color-scheme: light;
+  }
+
+  .dark select,
+  .dark select option {
+    color: #f8fafc;
+    background-color: #0f172a;
+    color-scheme: dark;
+  }
+
   body {
     @apply bg-background text-foreground;
   }

@@ -1,36 +1,42 @@
 <?php
 namespace App\Imports;
-use App\Models\Product; use Illuminate\Support\Collection; use Maatwebsite\Excel\Concerns\ToCollection; use Maatwebsite\Excel\Concerns\WithStartRow;
-class DailyReportProductMasterImport implements ToCollection, WithStartRow
+use App\Models\Product; use Illuminate\Support\Collection; use Maatwebsite\Excel\Concerns\ToCollection; use Maatwebsite\Excel\Concerns\WithChunkReading; use Maatwebsite\Excel\Concerns\WithStartRow;
+class DailyReportProductMasterImport implements ToCollection, WithChunkReading, WithStartRow
 {
 	private array $columns = [];
-	private array $productNameCache = [];
+	private array $seenMm = [];
 
 	public function startRow(): int { return 1; }
+	public function chunkSize(): int { return 250; }
 
 	public function collection(Collection $rows): void
 	{
 		foreach ($rows as $row) {
 			$values = array_values($row->toArray());
 			if ($this->columns === []) {
-				$this->columns = $this->headers($values);
-				continue;
+				$columns = $this->headers($values);
+				if ($columns !== null) {
+					$this->columns = $columns;
+					continue;
+				}
+				$this->columns = ['mm' => 1, 'description' => 2, 'qty' => 3];
 			}
 
 			$mm = $this->number($values[$this->columns['mm']] ?? null);
 			$description = $this->text($values[$this->columns['description']] ?? null);
 			$qty = $this->quantity($values[$this->columns['qty']] ?? null);
 			if ($mm === null || $description === '' || $qty < 1) continue;
+			if (isset($this->seenMm[$mm])) continue;
+			$this->seenMm[$mm] = true;
 
-			$nameKey = $this->key($description);
 			$product = Product::withTrashed()->where('mm_number', $mm)->first();
-			if (!$product) $product = $this->productNameCache[$nameKey] ?? Product::withTrashed()->whereRaw('LOWER(name) = ?', [strtolower($description)])->first();
-			if (!$product) {
-				$product = Product::withTrashed()->get(['id', 'name', 'mm_number', 'code', 'description', 'qty_per_box', 'is_active', 'deleted_at'])->first(fn (Product $item) => $this->key($item->name) === $nameKey);
-			}
+			if (!$product && Product::withTrashed()->whereRaw('LOWER(name) = ?', [strtolower($description)])->exists()) continue;
+			if ($product && Product::withTrashed()->whereRaw('LOWER(name) = ?', [strtolower($description)])->where($product->getKeyName(), '<>', $product->getKey())->exists()) continue;
+			$code = $product->code ?? 'MM-'.$mm;
+			if (!$product && Product::withTrashed()->where('code', $code)->exists()) continue;
 			$product ??= new Product();
 			$product->fill([
-				'code' => $product->code ?: 'MM-'.$mm,
+				'code' => $product->code ?: $code,
 				'name' => $description,
 				'mm_number' => $mm,
 				'description' => $description,
@@ -39,11 +45,10 @@ class DailyReportProductMasterImport implements ToCollection, WithStartRow
 			]);
 			$product->save();
 			if ($product->trashed()) $product->restore();
-			$this->productNameCache[$nameKey] = $product;
 		}
 	}
 
-	private function headers(array $values): array
+	private function headers(array $values): ?array
 	{
 		$headers = array_map(fn ($value) => strtoupper($this->text($value)), $values);
 		$find = function (array $names) use ($headers): int {
@@ -53,11 +58,12 @@ class DailyReportProductMasterImport implements ToCollection, WithStartRow
 			}
 			return -1;
 		};
-		return [
-			'mm' => max(0, $find(['MM', 'NO. MM', 'MM NUMBER'])),
-			'description' => max(0, $find(['DESCRIPTION', 'DESCRIPTION ITEM', 'NAMA ITEM'])),
-			'qty' => max(0, $find(['/BOX', 'QTY /BOX', 'QTY PER BOX', 'QTY/BOX'])),
+		$columns = [
+			'mm' => $find(['MM', 'NO. MM', 'MM NUMBER']),
+			'description' => $find(['DESCRIPTION', 'DESCRIPTION ITEM', 'NAMA ITEM']),
+			'qty' => $find(['/BOX', 'QTY /BOX', 'QTY PER BOX', 'QTY/BOX']),
 		];
+		return in_array(-1, $columns, true) ? null : $columns;
 	}
 
 	private function text(mixed $value): string

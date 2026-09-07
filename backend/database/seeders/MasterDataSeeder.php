@@ -79,9 +79,9 @@ class MasterDataSeeder extends Seeder
         $rolePermissions = [
             'Administrator' => $permissions,
             'Super Admin' => $permissions,
-            'QA Manager' => ['dashboard.view', 'daily-reports.view', 'daily-reports.review', 'daily-reports.approve', 'daily-reports.reject', 'daily-reports.lock', 'daily-reports.export', 'audit.view'],
-            'QA Supervisor' => ['dashboard.view', 'daily-reports.view', 'daily-reports.review', 'daily-reports.approve', 'daily-reports.reject', 'daily-reports.lock', 'daily-reports.export'],
-            'QA Staff' => ['dashboard.view', 'daily-reports.view', 'daily-reports.create', 'daily-reports.update', 'daily-reports.delete', 'daily-reports.submit', 'daily-reports.export', 'daily-reports.import'],
+            'QA Manager' => ['dashboard.view', 'daily-reports.view', 'daily-reports.lock', 'daily-reports.export', 'audit.view'],
+            'QA Supervisor' => ['dashboard.view', 'daily-reports.view', 'daily-reports.lock', 'daily-reports.export'],
+            'QA Staff' => ['dashboard.view', 'daily-reports.view', 'daily-reports.create', 'daily-reports.update', 'daily-reports.delete', 'daily-reports.export', 'daily-reports.import'],
             'Management' => array_values(array_filter($permissions, fn (string $permission): bool => !str_starts_with($permission, 'users.'))),
             'Production' => ['dashboard.view', 'daily-reports.view'],
         ];

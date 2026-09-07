@@ -9,23 +9,31 @@ class DailyReportResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $snapshot = $this->master_snapshot ?? [];
+        $plant = $snapshot['plant'] ?? $this->plant;
+        $machine = $snapshot['machine'] ?? $this->machine;
+        $shift = $snapshot['shift'] ?? $this->shift;
+        $product = $snapshot['product'] ?? $this->product;
+        $checker = $snapshot['checker'] ?? $this->checker;
+        $checker2 = $snapshot['checker_2'] ?? $this->checker2;
+        $defects = array_key_exists('defects', $snapshot) ? collect($snapshot['defects']) : $this->defects;
         return [
             'id' => $this->id,
-            'plant' => ['id' => $this->plant?->id, 'code' => $this->plant?->code, 'name' => $this->plant?->name],
-            'machine' => ['id' => $this->machine?->id, 'code' => $this->machine?->code, 'name' => $this->machine?->name],
-            'shift' => ['id' => $this->shift?->id, 'code' => $this->shift?->code, 'name' => $this->shift?->name],
-            'product' => ['id' => $this->product?->id, 'code' => $this->product?->code, 'name' => $this->product?->name, 'item_name' => $this->product?->name, 'mm_number' => $this->product?->mm_number, 'description' => $this->product?->name, 'qty_per_box' => $this->product?->qty_per_box],
+            'plant' => ['id' => data_get($plant, 'id'), 'code' => data_get($plant, 'code'), 'name' => data_get($plant, 'name')],
+            'machine' => ['id' => data_get($machine, 'id'), 'code' => data_get($machine, 'code'), 'name' => data_get($machine, 'name')],
+            'shift' => ['id' => data_get($shift, 'id'), 'code' => data_get($shift, 'code'), 'name' => data_get($shift, 'name')],
+            'product' => ['id' => data_get($product, 'id'), 'code' => data_get($product, 'code'), 'name' => data_get($product, 'name'), 'item_name' => data_get($product, 'name'), 'mm_number' => data_get($product, 'mm_number'), 'description' => data_get($product, 'description') ?: data_get($product, 'name'), 'qty_per_box' => data_get($product, 'qty_per_box')],
             'product_type' => $this->product_type,
-                'checker' => ['id' => $this->checker?->id ?? $this->qaChecker?->id, 'employee_number' => $this->checker?->employee_number, 'name' => $this->checker?->name ?? $this->qaChecker?->name, 'position' => $this->checker?->position],
-                'checker_2' => $this->checker2 ? ['id' => $this->checker2->id, 'employee_number' => $this->checker2->employee_number, 'name' => $this->checker2->name] : null,
-                'qa_checker_2' => $this->checker2 ? ['id' => $this->checker2->id, 'employee_number' => $this->checker2->employee_number, 'name' => $this->checker2->name] : null,
+                'checker' => ['id' => data_get($checker, 'id') ?? $this->qaChecker?->id, 'employee_number' => data_get($checker, 'employee_number'), 'name' => data_get($checker, 'name') ?? $this->qaChecker?->name, 'position' => data_get($checker, 'position')],
+                'checker_2' => $checker2 ? ['id' => data_get($checker2, 'id'), 'employee_number' => data_get($checker2, 'employee_number'), 'name' => data_get($checker2, 'name')] : null,
+                'qa_checker_2' => $checker2 ? ['id' => data_get($checker2, 'id'), 'employee_number' => data_get($checker2, 'employee_number'), 'name' => data_get($checker2, 'name')] : null,
             'mm_number' => $this->mm_number,
             'po_number' => $this->po_number,
             'output_box' => $this->output_box,
             'qty_per_box' => $this->qty_per_box,
             'output_pcs' => $this->output_pcs,
-            'defects' => $this->defects->map(fn ($item) => ['id' => $item->id, 'defect_id' => $item->defect_id, 'defect' => ['id' => $item->defect?->id, 'code' => $item->defect?->code, 'name' => $item->defect?->name, 'description' => $item->defect?->description, 'category' => $item->defect?->category], 'quantity' => $item->quantity, 'remarks' => $item->remarks])->values(),
-            'total_defect' => $this->defects->sum('quantity'),
+            'defects' => $defects->map(fn ($item) => ['id' => data_get($item, 'id'), 'defect_id' => data_get($item, 'defect_id'), 'defect' => ['id' => data_get($item, 'defect.id'), 'code' => data_get($item, 'defect.code'), 'name' => data_get($item, 'defect.name'), 'description' => data_get($item, 'defect.description'), 'category' => data_get($item, 'defect.category')], 'quantity' => data_get($item, 'quantity'), 'remarks' => data_get($item, 'remarks')])->values(),
+            'total_defect' => $defects->sum('quantity'),
             'defect' => $this->defect ? ['id' => $this->defect->id, 'code' => $this->defect->code, 'name' => $this->defect->name, 'category' => $this->defect->category] : null,
             'quantity_defect' => $this->quantity_defect,
             'finding_range_box' => $this->finding_range_box,

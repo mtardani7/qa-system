@@ -38,6 +38,7 @@ final class DailyReportRepository extends BaseRepository implements DailyReportR
             ->when($filters['product_type'] ?? null, fn ($q, $value) => $q->where('product_type', $value))
             ->when($filters['result'] ?? null, fn ($q, $value) => $q->where('result', $value))
             ->when($filters['status'] ?? null, fn ($q, $value) => $q->where('status', $value))
+            ->when(filter_var($filters['output_box_zero'] ?? false, FILTER_VALIDATE_BOOLEAN), fn ($q) => $q->where('output_box', 0))
             ->when($filters['defect_id'] ?? null, fn ($q, $value) => $q->whereHas('defects', fn ($defects) => $defects->where('defect_id', $value)))
             ->when($filters['production_date'] ?? null, fn ($q, $value) => $q->whereDate('production_date', $value))
             ->when($filters['production_date_from'] ?? null, fn ($q, $value) => $q->whereDate('production_date', '>=', $value))
@@ -56,5 +57,5 @@ final class DailyReportRepository extends BaseRepository implements DailyReportR
             });
     }
 
-    protected function allowedSorts(): array { return ['production_date', 'po_number', 'output_box', 'output_pcs', 'quantity_defect', 'created_at', 'id']; }
+    protected function allowedSorts(): array { return ['production_date', 'machine_id', 'po_number', 'output_box', 'output_pcs', 'quantity_defect', 'created_at', 'id']; }
 }
