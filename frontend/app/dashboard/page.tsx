@@ -37,6 +37,10 @@ export default function DashboardPage() {
   const drillDown = (reportId?: number) => { if (reportId) router.push(`/daily-reports/${reportId}`); };
   const updatedLabel = dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "-";
   const defectRows: DashboardRanking[] = data?.top_defects.map((item) => ({ id: item.id, report_id: item.report_id, code: item.code, name: item.name, value: item.quantity })) ?? [];
+  const baseKpi = data?.kpi ?? data?.monthly_kpi ?? data?.yearly_kpi;
+  const monthlyKpi = data?.monthly_kpi ?? data?.kpi;
+  const yearlyKpi = data?.yearly_kpi ?? data?.kpi;
+  const yearly = data?.yearly ?? data?.monthly;
 
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-6 dark:bg-slate-950 sm:px-6 lg:px-8 lg:py-8">
@@ -64,8 +68,8 @@ export default function DashboardPage() {
               <KpiCard label="Today's Production" value={data.today.production.toLocaleString()} icon={Factory} />
               <KpiCard label="Today's Output PCS" value={data.today.output_pcs.toLocaleString()} icon={PackageCheck} />
               <KpiCard label="Today's Defects" value={data.today.defects.toLocaleString()} icon={ShieldAlert} />
-              <KpiCard label="Today's Defect Rate" value={`${data.today.defect_rate}%`} icon={Activity} indicator={data.today.defect_rate <= data.kpi.target_defect_rate ? "green" : "red"} />
-              <KpiCard label="Today's Yield" value={`${data.today.yield}%`} icon={Gauge} indicator={data.today.yield >= data.kpi.target_yield ? "green" : "yellow"} />
+              <KpiCard label="Today's Defect Rate" value={`${data.today.defect_rate}%`} icon={Activity} indicator={data.today.defect_rate <= (baseKpi?.target_defect_rate ?? 2) ? "green" : "red"} />
+              <KpiCard label="Today's Yield" value={`${data.today.yield}%`} icon={Gauge} indicator={data.today.yield >= (baseKpi?.target_yield ?? 98) ? "green" : "yellow"} />
             </div>
           </section>
 
@@ -74,8 +78,18 @@ export default function DashboardPage() {
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <KpiCard label="Monthly Production" value={data.monthly.production.toLocaleString()} icon={Factory} />
               <KpiCard label="Monthly Defects" value={data.monthly.defects.toLocaleString()} icon={ShieldAlert} />
-              <KpiCard label={`Target Yield (${data.kpi.target_yield}%)`} value={`${data.kpi.actual_yield}%`} icon={Target} indicator={data.kpi.yield_indicator} />
-              <KpiCard label={`Target Defect Rate (${data.kpi.target_defect_rate}%)`} value={`${data.kpi.actual_defect_rate}%`} icon={Target} indicator={data.kpi.defect_rate_indicator} />
+              <KpiCard label={`Target Yield (${monthlyKpi?.target_yield ?? 0}%)`} value={`${monthlyKpi?.actual_yield ?? 0}%`} icon={Target} indicator={monthlyKpi?.yield_indicator ?? "yellow"} />
+              <KpiCard label={`Target Defect Rate (${monthlyKpi?.target_defect_rate ?? 0}%)`} value={`${monthlyKpi?.actual_defect_rate ?? 0}%`} icon={Target} indicator={monthlyKpi?.defect_rate_indicator ?? "yellow"} />
+            </div>
+          </section>
+
+          <section>
+            <div className="mb-3"><h2 className="text-base font-semibold text-slate-950 dark:text-white">Yearly and target performance</h2></div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <KpiCard label="Yearly Production" value={(yearly?.production ?? 0).toLocaleString()} icon={Factory} />
+              <KpiCard label="Yearly Defects" value={(yearly?.defects ?? 0).toLocaleString()} icon={ShieldAlert} />
+              <KpiCard label={`Target Yield (${yearlyKpi?.target_yield ?? 0}%)`} value={`${yearlyKpi?.actual_yield ?? 0}%`} icon={Target} indicator={yearlyKpi?.yield_indicator ?? "yellow"} />
+              <KpiCard label={`Target Defect Rate (${yearlyKpi?.target_defect_rate ?? 0}%)`} value={`${yearlyKpi?.actual_defect_rate ?? 0}%`} icon={Target} indicator={yearlyKpi?.defect_rate_indicator ?? "yellow"} />
             </div>
           </section>
 

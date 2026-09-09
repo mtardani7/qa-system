@@ -22,13 +22,14 @@ final class DashboardService
             return $defect;
         }, $topDefects);
         $todayFilters = new DashboardFilters(now()->toImmutable(), $filters->plantId, $filters->shiftId, $filters->machineId, $filters->lineId, $filters->productId, $filters->checkerId, now()->toImmutable(), now()->toImmutable(), 'daily', $filters->scopePlantIds);
-        $monthlyDate = $filters->date;
-        $monthlyFilters = new DashboardFilters($monthlyDate, $filters->plantId, $filters->shiftId, $filters->machineId, $filters->lineId, $filters->productId, $filters->checkerId, $monthlyDate->startOfMonth(), $monthlyDate->endOfMonth(), 'monthly', $filters->scopePlantIds);
-        $today = $this->dashboard->periodSummary($todayFilters); $monthly = $this->dashboard->periodSummary($monthlyFilters);
+            $monthlyFilters = new DashboardFilters($filters->date, $filters->plantId, $filters->shiftId, $filters->machineId, $filters->lineId, $filters->productId, $filters->checkerId, $filters->date->startOfMonth(), $filters->date->endOfMonth(), 'monthly', $filters->scopePlantIds);
+            $yearlyFilters = new DashboardFilters($filters->date, $filters->plantId, $filters->shiftId, $filters->machineId, $filters->lineId, $filters->productId, $filters->checkerId, $filters->date->startOfYear(), $filters->date->endOfYear(), 'yearly', $filters->scopePlantIds);
+            $today = $this->dashboard->periodSummary($todayFilters); $monthly = $this->dashboard->periodSummary($monthlyFilters); $yearly = $this->dashboard->periodSummary($yearlyFilters);
         return [
             'date' => $filters->date->toDateString(),
             'summary' => ['production_pcs' => $production, 'defect_qty' => $defects, 'defect_rate' => $production > 0 ? round(($defects / $production) * 100, 2) : 0, 'yield' => $production > 0 ? round((($production - $defects) / $production) * 100, 3) : 100],
-            'today' => $this->kpis($today), 'monthly' => $this->kpis($monthly),
+                'today' => $this->kpis($today), 'monthly' => $this->kpis($monthly), 'yearly' => $this->kpis($yearly),
+                'kpi' => $this->kpi($summary), 'monthly_kpi' => $this->kpi($monthly), 'yearly_kpi' => $this->kpi($yearly),
             'kpi' => $this->kpi($summary),
             'top_defects' => $topDefects,
             'pareto' => $pareto,

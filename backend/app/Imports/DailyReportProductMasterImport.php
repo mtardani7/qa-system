@@ -6,6 +6,8 @@ class DailyReportProductMasterImport implements ToCollection, WithChunkReading, 
 	private array $columns = [];
 	private array $seenMm = [];
 
+	public function __construct(private readonly int $plantId) {}
+
 	public function startRow(): int { return 1; }
 	public function chunkSize(): int { return 250; }
 
@@ -19,23 +21,26 @@ class DailyReportProductMasterImport implements ToCollection, WithChunkReading, 
 					$this->columns = $columns;
 					continue;
 				}
-				$this->columns = ['mm' => 1, 'description' => 2, 'qty' => 3];
+				if ($this->columns === []) continue;
 			}
 
+			$plantId = $this->plantId;
 			$mm = $this->number($values[$this->columns['mm']] ?? null);
 			$description = $this->text($values[$this->columns['description']] ?? null);
 			$qty = $this->quantity($values[$this->columns['qty']] ?? null);
 			if ($mm === null || $description === '' || $qty < 1) continue;
-			if (isset($this->seenMm[$mm])) continue;
-			$this->seenMm[$mm] = true;
+			$seenKey = ($plantId ?? 'shared').':'.$mm;
+			if (isset($this->seenMm[$seenKey])) continue;
+			$this->seenMm[$seenKey] = true;
 
-			$product = Product::withTrashed()->where('mm_number', $mm)->first();
-			if (!$product && Product::withTrashed()->whereRaw('LOWER(name) = ?', [strtolower($description)])->exists()) continue;
-			if ($product && Product::withTrashed()->whereRaw('LOWER(name) = ?', [strtolower($description)])->where($product->getKeyName(), '<>', $product->getKey())->exists()) continue;
+			$product = Product::withTrashed()->where('mm_number', $mm)->when($plantId, fn ($query) => $query->where('plant_id', $plantId), fn ($query) => $query->whereNull('plant_id'))->first();
+			if (!$product && Product::withTrashed()->whereRaw('LOWER(name) = ?', [strtolower($description)])->when($plantId, fn ($query) => $query->where('plant_id', $plantId), fn ($query) => $query->whereNull('plant_id'))->exists()) continue;
+			if ($product && Product::withTrashed()->whereRaw('LOWER(name) = ?', [strtolower($description)])->when($plantId, fn ($query) => $query->where('plant_id', $plantId), fn ($query) => $query->whereNull('plant_id'))->where($product->getKeyName(), '<>', $product->getKey())->exists()) continue;
 			$code = $product->code ?? 'MM-'.$mm;
-			if (!$product && Product::withTrashed()->where('code', $code)->exists()) continue;
+			if (!$product && Product::withTrashed()->where('code', $code)->when($plantId, fn ($query) => $query->where('plant_id', $plantId), fn ($query) => $query->whereNull('plant_id'))->exists()) continue;
 			$product ??= new Product();
 			$product->fill([
+				'plant_id' => $plantId,
 				'code' => $product->code ?: $code,
 				'name' => $description,
 				'mm_number' => $mm,
@@ -63,7 +68,7 @@ class DailyReportProductMasterImport implements ToCollection, WithChunkReading, 
 			'description' => $find(['DESCRIPTION', 'DESCRIPTION ITEM', 'NAMA ITEM']),
 			'qty' => $find(['/BOX', 'QTY /BOX', 'QTY PER BOX', 'QTY/BOX']),
 		];
-		return in_array(-1, $columns, true) ? null : $columns;
+		return in_array(-1, [$columns['mm'], $columns['description'], $columns['qty']], true) ? null : $columns;
 	}
 
 	private function text(mixed $value): string

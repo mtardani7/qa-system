@@ -20,7 +20,6 @@ const defaults = { output_box: 0, product_type: "FG" as const, defects: [{ defec
 export function DailyReportFormDialog({ open, report, onClose }: Props) {
   const { data: lookups, isLoading: loadingLookups } = useDailyReportLookups();
   const [productSearch, setProductSearch] = useState("");
-  const { data: products = [] } = useDailyReportProducts(productSearch || report?.product.mm_number || "");
   const user = useAuthStore((state) => state.user);
   const isSuperAdmin = user?.roles.includes("Super Admin") ?? false;
   const plants = useMemo(() => lookups?.plants.filter((plant) => isSuperAdmin || !user?.plant_ids || user.plant_ids.includes(plant.id)) ?? [], [isSuperAdmin, lookups?.plants, user?.plant_ids]);
@@ -30,6 +29,7 @@ export function DailyReportFormDialog({ open, report, onClose }: Props) {
   const { fields, append, remove } = useFieldArray({ control, name: "defects" });
   const clearDefects = () => remove();
   const plantId = Number(useWatch({ control, name: "plant_id" })) || undefined;
+  const { data: products = [] } = useDailyReportProducts(productSearch || report?.product.mm_number || "", plantId);
   const productId = Number(useWatch({ control, name: "product_id" })) || undefined;
   const outputBox = Number(useWatch({ control, name: "output_box" })) || 0;
   const defectValues = useWatch({ control, name: "defects" });

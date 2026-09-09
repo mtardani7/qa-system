@@ -2,6 +2,8 @@ services:
   qa-postgres:
     image: postgres:17-alpine
     restart: unless-stopped
+    ports:
+      - "${QA_POSTGRES_BIND_IP:-127.0.0.1}:${QA_POSTGRES_PORT:-5432}:5432"
     environment:
       POSTGRES_DB: ${DB_DATABASE:?Set DB_DATABASE}
       POSTGRES_USER: ${DB_USERNAME:?Set DB_USERNAME}

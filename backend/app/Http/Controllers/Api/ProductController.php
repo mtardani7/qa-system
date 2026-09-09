@@ -19,7 +19,7 @@ class ProductController extends BaseApiController
     public function import(ProductImportRequest $request)
     {
         try {
-            Excel::import(new DailyReportProductMasterImport(), $request->file('file'));
+            Excel::import(new DailyReportProductMasterImport((int) $request->input('plant_id')), $request->file('file'));
         } catch (Throwable $exception) {
             report($exception);
             $message = $exception instanceof QueryException && str_contains($exception->getMessage(), 'products_')

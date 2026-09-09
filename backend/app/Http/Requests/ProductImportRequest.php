@@ -15,6 +15,7 @@ class ProductImportRequest extends FormRequest
     {
         return [
             'file' => ['required', 'file', 'mimes:xlsx,xls', 'max:51200'],
+            'plant_id' => ['required', 'integer', 'exists:plants,id'],
         ];
     }
 }

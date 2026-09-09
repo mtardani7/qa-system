@@ -20,7 +20,7 @@ class DailyReportRequest extends FormRequest
             'plant_id' => ['required', 'integer', Rule::in($allowedPlantIds), Rule::exists('plants', 'id')->where('is_active', true)],
             'machine_id' => ['required', 'integer', Rule::exists('machines', 'id')->where(fn ($query) => $query->where('plant_id', $plantId)->where('is_active', true))],
             'shift_id' => ['required', 'integer', Rule::exists('shifts', 'id')->where(fn ($query) => $query->where('is_active', true)->where(function ($inner) use ($plantId) { $inner->where('plant_id', $plantId)->orWhereNull('plant_id'); }))],
-            'product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('is_active', true)],
+            'product_id' => ['required', 'integer', Rule::exists('products', 'id')->where(fn ($query) => $query->where('is_active', true)->where(function ($inner) use ($plantId) { $inner->where('plant_id', $plantId)->orWhereNull('plant_id'); }) )],
             'product_type' => ['required', Rule::in(['FG', 'WIP'])],
             'checker_id' => [$legacyPayload ? 'nullable' : 'required', 'integer', Rule::exists('qa_checkers', 'id')->where(fn ($query) => $query->where('plant_id', $plantId)->where('is_active', true))],
             'checker_2_id' => ['nullable', 'integer', Rule::exists('qa_checkers', 'id')->where(fn ($query) => $query->where('plant_id', $plantId)->where('is_active', true)), 'different:checker_id'],

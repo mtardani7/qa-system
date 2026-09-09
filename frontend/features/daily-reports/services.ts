@@ -12,7 +12,7 @@ export async function downloadDailyReportImportTemplate() { const response = awa
 export async function getDailyReportImport(id: number) { const { data } = await apiClient.get<ApiResponse<DailyReportImportStatus>>(`/daily-reports/imports/${id}`); return data.data; }
 export async function getDailyReports(params: DailyReportQuery = {}) { const query = { per_page: 20, ...params }; const { data } = await apiClient.get<DailyReportCollectionResponse>("/daily-reports", { params: query }); if (!Array.isArray(data.data)) return data.data; return { data: data.data, current_page: data.meta?.current_page ?? Number(query.page ?? 1), last_page: data.meta?.last_page ?? (data.data.length ? Number(query.page ?? 1) : 1), per_page: data.meta?.per_page ?? Number(query.per_page ?? 20), total: data.meta?.total ?? data.data.length }; }
 export async function getDailyReportLookups() { const { data } = await apiClient.get<ApiResponse<DailyReportLookups>>("/daily-reports/lookups"); return data.data; }
-export async function getDailyReportProducts(search = "") { const { data } = await apiClient.get<ApiResponse<DailyReportLookups["products"]>>("/daily-reports/lookups/products", { params: { search } }); return data.data; }
+export async function getDailyReportProducts(search = "", plantId?: number) { const { data } = await apiClient.get<ApiResponse<DailyReportLookups["products"]>>("/daily-reports/lookups/products", { params: { search, plant_id: plantId } }); return data.data; }
 export async function createDailyReport(payload: DailyReportPayload) { const { data } = await apiClient.post<ApiResponse<DailyReport>>("/daily-reports", payload); return data.data; }
 export async function pasteDailyReports(payloads: DailyReportPayload[]) {
 	const reports: DailyReport[] = [];
