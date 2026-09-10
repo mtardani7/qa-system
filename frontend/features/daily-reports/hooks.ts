@@ -1,11 +1,17 @@
 "use client";
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAuthStore } from "@/features/auth/store";
 import { bulkDeleteDailyReports, bulkLockDailyReports, createDailyReport, deleteDailyReport, duplicateDailyReport, getDailyReport, getDailyReportExport, getDailyReportImport, getDailyReportLookups, getDailyReportProducts, getDailyReports, importDailyReports, pasteDailyReports, queueDailyReportExport, updateDailyReport, workflowDailyReport, type DailyReportPayload, type DailyReportQuery } from "./services";
 
-export const dailyReportKeys = { all: ["daily-reports"] as const, list: (query: DailyReportQuery) => ["daily-reports", "list", query] as const, lookups: ["daily-reports", "lookups"] as const };
+export const dailyReportKeys = { all: ["daily-reports"] as const, list: (query: DailyReportQuery) => ["daily-reports", "list", query] as const, lookups: (userId?: number, roles: string[] = [], plantIds: number[] = []) => ["daily-reports", "lookups", userId, roles.join(","), plantIds.join(",")] as const };
 export function useDailyReports(query: DailyReportQuery) { return useQuery({ queryKey: dailyReportKeys.list(query), queryFn: () => getDailyReports(query), placeholderData: keepPreviousData, staleTime: 30_000 }); }
-export function useDailyReportLookups() { return useQuery({ queryKey: dailyReportKeys.lookups, queryFn: getDailyReportLookups, staleTime: 300_000 }); }
+export function useDailyReportLookups() {
+	const user = useAuthStore((state) => state.user);
+	const roles = useAuthStore((state) => state.roles);
+	const plantIds = user?.plant_ids ?? [];
+	return useQuery({ queryKey: dailyReportKeys.lookups(user?.id, roles, plantIds), queryFn: getDailyReportLookups, staleTime: 300_000 });
+}
 export function useDailyReportProducts(search: string, plantId?: number) { return useQuery({ queryKey: ["daily-reports", "products", search, plantId], queryFn: () => getDailyReportProducts(search, plantId), staleTime: 300_000, enabled: Boolean(plantId) }); }
 export function useCreateDailyReport() { const client = useQueryClient(); return useMutation({ mutationFn: (payload: DailyReportPayload) => createDailyReport(payload), onSuccess: () => client.invalidateQueries({ queryKey: dailyReportKeys.all }) }); }
 export function usePasteDailyReports() { const client = useQueryClient(); return useMutation({ mutationFn: (payloads: DailyReportPayload[]) => pasteDailyReports(payloads), onSuccess: () => client.invalidateQueries({ queryKey: dailyReportKeys.all }) }); }
