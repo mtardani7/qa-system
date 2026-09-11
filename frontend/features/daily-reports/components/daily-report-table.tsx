@@ -297,7 +297,7 @@ export function DailyReportTable({ onEdit }: Props) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `daily-reports-${id}.xlsx`;
+    link.download = `${filters.period}-report-${id}.xlsx`;
     link.click();
     URL.revokeObjectURL(url);
   };

@@ -9,6 +9,10 @@ interface DashboardRepositoryInterface
     public function summary(DashboardFilters $filters): array;
     public function topDefects(DashboardFilters $filters): array;
     public function topMachines(DashboardFilters $filters): array;
+    public function changeOverBySection(DashboardFilters $filters): array;
+    public function changeOverByMachine(DashboardFilters $filters): array;
+    public function defectCategories(DashboardFilters $filters): array;
+    public function worstMachineByDefectRate(DashboardFilters $filters): ?array;
     public function topProducts(DashboardFilters $filters): array;
     public function monthlyTrend(DashboardFilters $filters): array;
     public function trend(DashboardFilters $filters, string $unit): array;

@@ -144,12 +144,13 @@ class DailyReportResumeExport implements FromArray, ShouldAutoSize, WithCharts, 
             $count = count($block['items']);
             $categories = new DataSeriesValues('String', "{$sheet}!\$D\${$block['dataStart']}:\$D\${$block['dataEnd']}", null, $count);
             $values = new DataSeriesValues('Number', "{$sheet}!\$E\${$block['dataStart']}:\$E\${$block['dataEnd']}", null, $count);
-            $series = new DataSeries(DataSeries::TYPE_PIECHART, null, [0], [], [$categories], [$values]);
+            $series = new DataSeries(DataSeries::TYPE_PIECHART_3D, null, [0], [], [$categories], [$values]);
+            $plotLayout = (new Layout())->setShowPercent(true)->setShowCatName(false)->setShowLeaderLines(false)->setDLblPos('bestFit');
             $chart = new Chart(
                 'section_'.$this->type.'_'.$index,
                 new Title('CO '.strtoupper($block['section'])),
                 new Legend(Legend::POSITION_RIGHT),
-                new PlotArea(new Layout(), [$series]),
+                new PlotArea($plotLayout, [$series]),
             );
             $chart->setTopLeftPosition('G'.$block['labelRow']);
             $chart->setBottomRightPosition('L'.($block['totalRow'] + 1));
@@ -223,7 +224,6 @@ class DailyReportResumeExport implements FromArray, ShouldAutoSize, WithCharts, 
             if ($layout['defectDataEnd'] >= $layout['defectDataStart']) {
                 $sheet->setAutoFilter('B'.$defectHeader.':F'.$layout['defectDataEnd']);
             }
-            $sheet->freezePane('B'.($defectHeader + 1));
 
             foreach (['A' => 3, 'B' => 30, 'C' => 14, 'D' => 16, 'E' => 14, 'F' => 12, 'G' => 3, 'H' => 12, 'I' => 12, 'J' => 12, 'K' => 12, 'L' => 16, 'M' => 14] as $column => $width) {
                 $sheet->getColumnDimension($column)->setWidth($width);

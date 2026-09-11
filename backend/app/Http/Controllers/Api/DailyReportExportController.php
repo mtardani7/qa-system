@@ -18,14 +18,10 @@ class DailyReportExportController extends BaseApiController
         $record = DailyReportExport::query()->findOrFail($export);
         $this->authorize('view', $record);
         abort_unless($record->status === 'completed' && $record->file_path && Storage::exists($record->file_path), 404);
+        $period = $record->filters['period'] ?? 'daily';
         return response(Storage::get($record->file_path), 200, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'Content-Disposition' => 'attachment; filename="daily-reports-'.$record->id.'.xlsx"',
-        ]);
-        abort_unless($record->status === 'completed' && $record->file_path && Storage::exists($record->file_path), 404);
-        return response(Storage::get($record->file_path), 200, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'Content-Disposition' => 'attachment; filename="daily-reports-'.$record->id.'.xlsx"',
+            'Content-Disposition' => 'attachment; filename="'.$period.'-report-'.$record->id.'.xlsx"',
         ]);
     }
 }
